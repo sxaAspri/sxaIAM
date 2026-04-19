@@ -16,8 +16,8 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install ruff mypy
-      - run: ruff check iamspy/
-      - run: mypy iamspy/
+      - run: ruff check sxaiam/
+      - run: mypy sxaiam/
 
   test:
     name: Tests (Python ${{ matrix.python-version }})

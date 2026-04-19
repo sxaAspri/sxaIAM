@@ -1,24 +1,27 @@
-# iamspy
+# sxaiam
 
 > AWS IAM attack path analysis — find privilege escalation chains before attackers do.
 
-[![CI](https://github.com/tu-usuario/iamspy/actions/workflows/ci.yml/badge.svg)](https://github.com/tu-usuario/iamspy/actions)
-[![PyPI](https://img.shields.io/pypi/v/iamspy)](https://pypi.org/project/iamspy/)
-[![Python](https://img.shields.io/pypi/pyversions/iamspy)](https://pypi.org/project/iamspy/)
+[![CI](https://github.com/sxaAspri/sxaIAM/actions/workflows/ci.yml/badge.svg)](https://github.com/sxaAspri/sxaIAM/actions)
+[![PyPI](https://img.shields.io/pypi/v/sxaiam)](https://pypi.org/project/sxaiam/)
+[![Python](https://img.shields.io/pypi/pyversions/sxaiam)](https://pypi.org/project/sxaiam/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 ---
 
 ## The problem
 
-AWS tells you what permissions exist. It doesn't tell you what an attacker can do with them *in combination*.
+AWS tells you what permissions exist. It doesn't tell you what an attacker can do
+with them *in combination*.
 
-AWS Security Hub might flag that a user has `iam:CreatePolicyVersion`. What it won't tell you is that this user, chaining three permissions that look harmless in isolation, can reach `AdministratorAccess` in two steps. That gap is what iamspy closes.
+AWS Security Hub might flag that a user has `iam:CreatePolicyVersion`. What it won't
+tell you is that this user, chaining three permissions that look harmless in isolation,
+can reach `AdministratorAccess` in two steps. That gap is what sxaiam closes.
 
 ```
-$ iamspy scan --profile staging
+$ sxaiam scan --profile staging
 
-[iamspy] Scanning account 123456789012...
+[sxaiam] Scanning account 123456789012...
 
   Found 3 privilege escalation paths:
 
@@ -40,7 +43,7 @@ $ iamspy scan --profile staging
 
 ## How it works
 
-iamspy ingests your AWS account's IAM configuration, resolves **effective permissions**
+sxaiam ingests your AWS account's IAM configuration, resolves **effective permissions**
 (accounting for SCPs, permission boundaries, and resource-based policies), builds a
 directed graph of identities and resources, and runs a path-finding algorithm to find
 all chains that lead to high-privilege nodes.
@@ -80,7 +83,7 @@ AWS account
 ## Install
 
 ```bash
-pip install iamspy
+pip install sxaiam
 ```
 
 Requires Python 3.10+ and AWS credentials with read-only IAM access.
@@ -92,28 +95,28 @@ The minimum required policy is in [`docs/required-policy.json`](docs/required-po
 
 **Scan a full account:**
 ```bash
-iamspy scan --profile my-aws-profile --output findings.json
+sxaiam scan --profile my-aws-profile --output findings.json
 ```
 
 **Scan and export as Markdown (for pentest reports):**
 ```bash
-iamspy scan --profile my-aws-profile --format markdown --output report.md
+sxaiam scan --profile my-aws-profile --format markdown --output report.md
 ```
 
 **Export the attack graph (for Gephi / Neo4j / visualization):**
 ```bash
-iamspy scan --profile my-aws-profile --format graphml --output graph.graphml
+sxaiam scan --profile my-aws-profile --format graphml --output graph.graphml
 ```
 
 **Compare findings against AWS Security Hub:**
 ```bash
-iamspy compare findings.json --region us-east-1
+sxaiam compare findings.json --region us-east-1
 ```
 
 **Use as a Python library:**
 ```python
-from iamspy.ingestion import IAMSnapshot
-from iamspy.graph import AttackGraph
+from sxaiam.ingestion import IAMSnapshot
+from sxaiam.graph import AttackGraph
 
 snapshot = IAMSnapshot.from_profile("my-profile")
 graph = AttackGraph.from_snapshot(snapshot)
@@ -125,9 +128,9 @@ for path in paths:
 
 ---
 
-## Why iamspy vs existing tools
+## Why sxaiam vs existing tools
 
-| Feature | iamspy | PMapper | Cloudsplaining | Ermetic |
+| Feature | sxaiam | PMapper | Cloudsplaining | Ermetic |
 |---|---|---|---|---|
 | Attack path chaining | ✅ | ✅ (basic) | ❌ | ✅ |
 | Offensive perspective | ✅ | partial | ❌ | ❌ |
@@ -140,9 +143,9 @@ for path in paths:
 
 ---
 
-## IAM permissions required to run iamspy
+## IAM permissions required
 
-iamspy is **read-only**. It never modifies your account.
+sxaiam is **read-only**. It never modifies your account.
 The minimum required permissions are:
 
 ```json
@@ -170,7 +173,7 @@ The minimum required permissions are:
 
 ## Escalation techniques covered
 
-iamspy currently models the following IAM privilege escalation classes:
+sxaiam currently models the following IAM privilege escalation classes:
 
 - `CreatePolicyVersion` — replace a managed policy with an Allow \*:\* version
 - `AttachUserPolicy` / `AttachRolePolicy` — attach AdministratorAccess to self
@@ -186,8 +189,8 @@ in [`docs/technique-coverage.md`](docs/technique-coverage.md) as a known gap.
 ## Project structure
 
 ```
-iamspy/
-├── iamspy/
+sxaiam/
+├── sxaiam/
 │   ├── cli.py           # CLI entry point (Typer)
 │   ├── ingestion/       # boto3 data collection
 │   ├── resolver/        # effective permissions calculator
@@ -206,8 +209,8 @@ iamspy/
 ## Development setup
 
 ```bash
-git clone https://github.com/tu-usuario/iamspy
-cd iamspy
+git clone https://github.com/sxaAspri/sxaIAM
+cd sxaIAM
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 
@@ -215,8 +218,8 @@ pip install -e ".[dev]"
 pytest
 
 # Lint + type check
-ruff check iamspy/
-mypy iamspy/
+ruff check sxaiam/
+mypy sxaiam/
 ```
 
 ---

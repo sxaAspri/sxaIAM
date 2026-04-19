@@ -3,13 +3,13 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "iamspy"
+name = "sxaiam"
 version = "0.1.0"
 description = "AWS IAM attack path analysis — find privilege escalation chains before attackers do"
 readme = "README.md"
 license = { file = "LICENSE" }
 authors = [
-  { name = "Aspri", email = "your@email.com" }
+  { name = "sxaAspri", email = "your@email.com" }
 ]
 keywords = ["aws", "iam", "security", "privilege-escalation", "pentest", "attack-path"]
 classifiers = [
@@ -42,12 +42,12 @@ dev = [
 ]
 
 [project.scripts]
-iamspy = "iamspy.cli:app"
+sxaiam = "sxaiam.cli:app"
 
 [project.urls]
-Homepage = "https://github.com/tu-usuario/iamspy"
-Repository = "https://github.com/tu-usuario/iamspy"
-Issues = "https://github.com/tu-usuario/iamspy/issues"
+Homepage = "https://github.com/sxaAspri/sxaIAM"
+Repository = "https://github.com/sxaAspri/sxaIAM"
+Issues = "https://github.com/sxaAspri/sxaIAM/issues"
 
 [tool.ruff]
 line-length = 100
@@ -58,7 +58,7 @@ select = ["E", "F", "I", "UP"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=iamspy --cov-report=term-missing"
+addopts = "--cov=sxaiam --cov-report=term-missing"
 
 [tool.mypy]
 python_version = "3.10"
