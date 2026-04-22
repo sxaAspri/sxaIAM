@@ -21,26 +21,26 @@ Decisiones de diseño:
 
 Output:
   Lista de EscalationPath, cada uno con:
-    - source_arn:   identidad de inicio
-    - steps:        lista de PathStep con evidencia por arista
-    - total_severity: severidad más alta en la ruta
+    - origin_arn:     identidad de inicio
+    - steps:          lista de PathStep con evidencia por arista
+    - severity:       severidad más alta en la ruta (como Severity enum)
 """
 
 from __future__ import annotations
 
 import logging
+import uuid
 from typing import Optional
 
 import networkx as nx
 
 from sxaiam.findings.escalation_path import EscalationPath, PathStep
+from sxaiam.findings.technique_base import Severity
 from sxaiam.graph.nodes import NODE_TYPE_ADMIN, IAMNode
 
 logger = logging.getLogger(__name__)
 
 # Límite de profundidad del BFS.
-# Rutas de más de 5 saltos son teóricamente posibles pero prácticamente
-# irrelevantes — y explosivas en cuentas con muchos roles.
 DEFAULT_CUTOFF = 5
 
 # Orden de severidad para calcular la severidad total de una ruta
@@ -50,6 +50,15 @@ _SEVERITY_ORDER = {
     "MEDIUM":   2,
     "LOW":      1,
     "INFO":     0,
+}
+
+# Mapeo de string → Severity enum para construir EscalationPath
+_STR_TO_SEVERITY: dict[str, Severity] = {
+    "CRITICAL": Severity.CRITICAL,
+    "HIGH":     Severity.HIGH,
+    "MEDIUM":   Severity.MEDIUM,
+    "LOW":      Severity.LOW,
+    "INFO":     Severity.INFO,
 }
 
 
@@ -80,8 +89,6 @@ class PathFinder:
         Encuentra todas las rutas de escalación hacia AdminNode
         desde todos los nodos del grafo.
 
-        Excluye el AdminNode como punto de partida.
-
         Returns:
             Lista de EscalationPath ordenada por severidad descendente.
         """
@@ -94,19 +101,14 @@ class PathFinder:
         for node_id in self._graph.nodes:
             if node_id == self._admin_id:
                 continue
+            all_paths.extend(self._bfs_from(node_id))
 
-            node_paths = self._bfs_from(node_id)
-            all_paths.extend(node_paths)
-
-        logger.info(
-            "PathFinder: %d rutas de escalación encontradas", len(all_paths)
-        )
-
+        logger.info("PathFinder: %d rutas encontradas", len(all_paths))
         return _sort_by_severity(all_paths)
 
     def find_paths_from(self, source_arn: str) -> list[EscalationPath]:
         """
-        Encuentra todas las rutas de escalación desde una identidad específica.
+        Encuentra todas las rutas desde una identidad específica.
 
         Args:
             source_arn: ARN del nodo de inicio (usuario o rol).
@@ -122,14 +124,10 @@ class PathFinder:
             logger.debug("Nodo %s no existe en el grafo", source_arn)
             return []
 
-        paths = self._bfs_from(source_arn)
-        return _sort_by_severity(paths)
+        return _sort_by_severity(self._bfs_from(source_arn))
 
     def find_paths_to_admin(self) -> list[EscalationPath]:
-        """
-        Alias semántico de find_all_paths().
-        Útil cuando se quiere ser explícito sobre el destino.
-        """
+        """Alias semántico de find_all_paths()."""
         return self.find_all_paths()
 
     # ------------------------------------------------------------------
@@ -137,15 +135,6 @@ class PathFinder:
     # ------------------------------------------------------------------
 
     def _bfs_from(self, source_id: str) -> list[EscalationPath]:
-        """
-        Ejecuta BFS desde source_id hacia AdminNode con cutoff.
-
-        Usa networkx.all_simple_paths que internamente hace BFS/DFS
-        limitado. Filtramos solo las rutas que llegan al AdminNode.
-
-        Returns:
-            Lista de EscalationPath que llegan al AdminNode.
-        """
         if self._admin_id is None:
             return []
 
@@ -158,16 +147,13 @@ class PathFinder:
                 target=self._admin_id,
                 cutoff=self._cutoff,
             )
-
             for node_sequence in raw_paths:
                 path = self._sequence_to_escalation_path(node_sequence)
                 if path is not None:
                     escalation_paths.append(path)
 
         except nx.NetworkXError as exc:
-            logger.debug(
-                "BFS error desde %s: %s", source_id, exc
-            )
+            logger.debug("BFS error desde %s: %s", source_id, exc)
 
         return escalation_paths
 
@@ -177,60 +163,67 @@ class PathFinder:
     ) -> Optional[EscalationPath]:
         """
         Convierte una secuencia de node_ids en un EscalationPath.
-
-        Cada par (node_sequence[i], node_sequence[i+1]) es una arista
-        del grafo con sus atributos de técnica y evidencia.
-
-        Returns:
-            EscalationPath con todos los steps, o None si la secuencia
-            tiene menos de 2 nodos (no es una ruta válida).
         """
         if len(node_sequence) < 2:
             return None
 
-        source_arn = node_sequence[0]
+        source_id    = node_sequence[0]
+        source_label = _get_node_label(self._graph, source_id)
         steps: list[PathStep] = []
 
-        for i in range(len(node_sequence) - 1):
-            src = node_sequence[i]
-            dst = node_sequence[i + 1]
-
+        for i, (src, dst) in enumerate(
+            zip(node_sequence[:-1], node_sequence[1:]), start=1
+        ):
             edge_data = self._graph.edges[src, dst]
-
-            # Nombre del nodo destino para el step
+            src_label = _get_node_label(self._graph, src)
             dst_label = _get_node_label(self._graph, dst)
 
+            # El builder guarda evidencia como list[dict] — PathStep.evidence
+            # es list[str], convertimos a strings legibles.
+            evidence_strs = _evidence_to_strings(edge_data.get("evidence", []))
+
             step = PathStep(
+                step_number=i,
+                from_arn=src,
+                from_name=src_label,
+                to_arn=dst,
+                to_name=dst_label,
+                technique_id=edge_data.get("technique", "unknown"),
                 technique_name=edge_data.get("technique", "unknown"),
                 severity=edge_data.get("severity", "INFO"),
-                from_arn=src,
-                to_arn=dst,
-                to_label=dst_label,
-                evidence=edge_data.get("evidence", []),
-                attack_steps=edge_data.get("attack_steps", []),
+                evidence=evidence_strs,
+                api_calls=edge_data.get("attack_steps", []),
             )
             steps.append(step)
 
         if not steps:
             return None
 
-        total_severity = _compute_total_severity(steps)
+        # Severidad total = la más alta entre todos los steps
+        top_severity_str = max(
+            steps,
+            key=lambda s: _SEVERITY_ORDER.get(s.severity, 0),
+        ).severity
+        total_severity = _STR_TO_SEVERITY.get(top_severity_str, Severity.INFO)
 
-        # Obtener el technique_match del primer step de técnica real
-        # (no trust_policy) para metadata del EscalationPath
+        # TechniqueMatch primario: primer step que no sea trust_policy
         primary_match = None
-        for i in range(len(node_sequence) - 1):
-            src = node_sequence[i]
-            dst = node_sequence[i + 1]
+        for src, dst in zip(node_sequence[:-1], node_sequence[1:]):
             tm = self._graph.edges[src, dst].get("technique_match")
             if tm is not None:
                 primary_match = tm
                 break
 
+        admin_label = _get_node_label(self._graph, self._admin_id)
+
         return EscalationPath(
-            source_arn=source_arn,
+            path_id=str(uuid.uuid4()),
+            severity=total_severity,
+            origin_arn=source_id,
+            origin_name=source_label,
+            target_arn=self._admin_id,
+            target_name=admin_label,
             steps=steps,
-            total_severity=total_severity,
             technique_match=primary_match,
         )
 
@@ -239,17 +232,10 @@ class PathFinder:
     # ------------------------------------------------------------------
 
     def _find_admin_node(self) -> Optional[str]:
-        """
-        Busca el AdminNode en el grafo por node_type.
-
-        Returns:
-            node_id del AdminNode o None si no existe.
-        """
         for node_id, data in self._graph.nodes(data=True):
             node_obj: Optional[IAMNode] = data.get("node")
             if node_obj and node_obj.node_type == NODE_TYPE_ADMIN:
                 return node_id
-
         logger.warning("AdminNode no encontrado en el grafo")
         return None
 
@@ -267,24 +253,31 @@ def _get_node_label(graph: nx.DiGraph, node_id: str) -> str:
     return node_id
 
 
-def _compute_total_severity(steps: list[PathStep]) -> str:
+def _evidence_to_strings(evidence: list) -> list[str]:
     """
-    Devuelve la severidad más alta entre todos los steps de la ruta.
-    Una ruta hereda la peor severidad de sus aristas.
-    """
-    if not steps:
-        return "INFO"
+    Convierte list[dict] de evidencia del builder a list[str] para PathStep.
 
-    return max(
-        steps,
-        key=lambda s: _SEVERITY_ORDER.get(s.severity, 0),
-    ).severity
+    Formato: "iam:CreatePolicyVersion on * (via inline: test-policy)"
+    """
+    result = []
+    for ev in evidence:
+        if isinstance(ev, str):
+            result.append(ev)
+        elif isinstance(ev, dict):
+            action      = ev.get("action", "unknown")
+            resource    = ev.get("resource", "*")
+            source_type = ev.get("source_type", "")
+            source_name = ev.get("source_name", "")
+            result.append(
+                f"{action} on {resource} (via {source_type}: {source_name})"
+            )
+    return result
 
 
 def _sort_by_severity(paths: list[EscalationPath]) -> list[EscalationPath]:
     """Ordena rutas de mayor a menor severidad."""
     return sorted(
         paths,
-        key=lambda p: _SEVERITY_ORDER.get(p.total_severity, 0),
+        key=lambda p: _SEVERITY_ORDER.get(p.severity.value, 0),
         reverse=True,
     )

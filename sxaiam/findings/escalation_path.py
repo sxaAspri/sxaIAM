@@ -6,12 +6,17 @@ EscalationPath — a complete, documented privilege escalation chain.
 This is the final output of the analysis engine. Each EscalationPath
 represents one way an attacker could move from a starting identity
 to a high-privilege target, with full evidence at every step.
+
+Changelog vs v0.1.0:
+  - PathStep: agregado campo `severity` (severidad por step individual)
+  - EscalationPath: agregado campo `technique_match` (TechniqueMatch primario
+    de la ruta, usado por el pathfinder y exporters de Fase 4)
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Optional
 
 from sxaiam.findings.technique_base import Severity, TechniqueMatch
 
@@ -30,20 +35,22 @@ class PathStep:
             to_name="admin-role",
             technique_id="passrole-lambda",
             technique_name="PassRole + Lambda execution",
+            severity="HIGH",
             evidence=["iam:PassRole on * (via managed_policy: DeveloperPermissions)"],
             api_calls=["lambda:CreateFunction", "lambda:InvokeFunction"],
         )
     """
 
-    step_number: int
-    from_arn: str
-    from_name: str
-    to_arn: str
-    to_name: str
-    technique_id: str
+    step_number:    int
+    from_arn:       str
+    from_name:      str
+    to_arn:         str
+    to_name:        str
+    technique_id:   str
     technique_name: str
-    evidence: list[str] = field(default_factory=list)
-    api_calls: list[str] = field(default_factory=list)
+    severity:       str = "INFO"   # CRITICAL / HIGH / MEDIUM / LOW / INFO
+    evidence:       list[str] = field(default_factory=list)
+    api_calls:      list[str] = field(default_factory=list)
 
     def summary(self) -> str:
         return (
@@ -65,14 +72,18 @@ class EscalationPath:
     - Compare it against Security Hub findings
     """
 
-    path_id: str
-    severity: Severity
-    origin_arn: str
-    origin_name: str
-    target_arn: str
-    target_name: str
-    steps: list[PathStep] = field(default_factory=list)
-    tags: list[str] = field(default_factory=list)
+    path_id:        str
+    severity:       Severity
+    origin_arn:     str
+    origin_name:    str
+    target_arn:     str
+    target_name:    str
+    steps:          list[PathStep]          = field(default_factory=list)
+    tags:           list[str]               = field(default_factory=list)
+    technique_match: Optional[TechniqueMatch] = field(default=None)
+    # technique_match: TechniqueMatch primario de la ruta.
+    # Poblado por el PathFinder con el primer match real (no trust_policy).
+    # Usado por exporters de Fase 4 para metadata adicional.
 
     @classmethod
     def from_match(cls, match: TechniqueMatch, path_id: str) -> EscalationPath:
@@ -88,6 +99,7 @@ class EscalationPath:
             to_name=match.target_name,
             technique_id=match.technique_id,
             technique_name=match.technique_name,
+            severity=match.severity.value if isinstance(match.severity, Severity) else str(match.severity),
             evidence=match.evidence,
             api_calls=match.attack_steps,
         )
@@ -99,6 +111,7 @@ class EscalationPath:
             target_arn=match.target_arn,
             target_name=match.target_name,
             steps=[step],
+            technique_match=match,
         )
 
     @property
@@ -144,11 +157,12 @@ class EscalationPath:
             "techniques": self.techniques_used,
             "steps": [
                 {
-                    "step": s.step_number,
-                    "from": s.from_name,
-                    "to": s.to_name,
+                    "step":      s.step_number,
+                    "from":      s.from_name,
+                    "to":        s.to_name,
                     "technique": s.technique_name,
-                    "evidence": s.evidence,
+                    "severity":  s.severity,
+                    "evidence":  s.evidence,
                     "api_calls": s.api_calls,
                 }
                 for s in self.steps
