@@ -71,30 +71,51 @@ class CreatePolicyVersionTechnique(EscalationTechnique):
         self,
         identity: ResolvedIdentity,
         snapshot: IAMSnapshot,
-    ) -> list[TechniqueMatch]:
+        ) -> list[TechniqueMatch]:
         matches = []
 
-        # Find all policies this identity can create new versions of
+        # Primero verificar que la identidad puede CreatePolicyVersion
+        can_create_any = identity.can("iam:CreatePolicyVersion", "*")
+
+        if not can_create_any:
+            has_specific = any(
+                identity.can("iam:CreatePolicyVersion", p.arn)
+                for p in snapshot.policies
+                if not p.is_aws_managed
+            )
+            if not has_specific:
+                return []
+
+        # Solo buscar en políticas adjuntas directamente a esta identidad
+        attached_arns: set[str] = set()
+
+        for user in snapshot.users:
+            if user.arn == identity.arn:
+                attached_arns = {p.arn for p in user.attached_policies}
+                break
+
+        for role in snapshot.roles:
+            if role.arn == identity.arn:
+                attached_arns = {p.arn for p in role.attached_policies}
+                break
+
         for policy in snapshot.policies:
             if policy.is_aws_managed:
-                continue  # can't modify AWS-managed policies
-
-            can_create = identity.can("iam:CreatePolicyVersion", policy.arn)
-            if not can_create:
-                can_create = identity.can("iam:CreatePolicyVersion", "*")
-            if not can_create:
                 continue
 
-            # The policy must also be attached to this identity
-            # (otherwise replacing it doesn't directly help)
-            policy_attached_to_self = self._policy_attached_to_identity(
-                policy.arn, identity.arn, snapshot
+            if policy.arn not in attached_arns:
+                continue
+
+            can_create = (
+                identity.can("iam:CreatePolicyVersion", policy.arn)
+                or identity.can("iam:CreatePolicyVersion", "*")
             )
-            if not policy_attached_to_self:
+            if not can_create:
                 continue
 
             evidence = self._build_evidence(
-                identity, ["iam:CreatePolicyVersion", "iam:SetDefaultPolicyVersion"]
+                identity,
+                ["iam:CreatePolicyVersion", "iam:SetDefaultPolicyVersion"],
             )
 
             matches.append(TechniqueMatch(
@@ -109,8 +130,8 @@ class CreatePolicyVersionTechnique(EscalationTechnique):
                 evidence=evidence,
                 attack_steps=[
                     f"1. Call iam:CreatePolicyVersion on {policy.arn} "
-                    f"with document {{\"Effect\":\"Allow\",\"Action\":\"*\",\"Resource\":\"*\"}}",
-                    f"2. Call iam:SetDefaultPolicyVersion to activate the new version",
+                    f'with document {{"Effect":"Allow","Action":"*","Resource":"*"}}',
+                    "2. Call iam:SetDefaultPolicyVersion to activate the new version",
                     f"3. {identity.name} now has AdministratorAccess via {policy.name}",
                 ],
             ))

@@ -51,9 +51,9 @@ class PolicyResolver:
       ✅ Layer 3 — wildcard resources: arn:aws:iam::*:role/*, *
 
     Not yet covered (documented gaps):
-      ❌ Condition keys (aws:RequestedRegion, aws:PrincipalTag, etc.)
-      ❌ Permission boundaries
-      ❌ Session policies (sts:AssumeRole with inline session policy)
+       Condition keys (aws:RequestedRegion, aws:PrincipalTag, etc.)
+       Permission boundaries
+       Session policies (sts:AssumeRole with inline session policy)
 
     Usage:
         resolver = PolicyResolver(snapshot)
@@ -341,18 +341,21 @@ class PolicyResolver:
         Remove any Allow that is overridden by an explicit Deny.
         In IAM, explicit Deny always wins — regardless of order or source.
 
-        Layer 2 + 3 active: uses covers_action() and covers_resource()
-        for wildcard-aware matching. This means:
-          - A Deny on 'iam:*' removes ALL iam: allows
-          - A Deny on 'arn:aws:iam::*:role/*' removes allows on any role ARN
-          - A Deny on '*' removes everything
+        A deny blocks an allow when the deny's action and resource
+        cover the allow's action and resource respectively.
+
+        Note: wildcard allows (iam:*) are NOT removed by specific denies
+        (iam:DeleteRole) — the deny blocks at query time via can().
+        This matches AWS evaluation semantics where you keep the broad
+        allow but the specific deny wins at access decision time.
         """
         if not denies:
             return allows
 
         def is_denied(perm: EffectivePermission) -> bool:
             return any(
-                deny.covers_action(perm.action) and deny.covers_resource(perm.resource)
+                deny.covers_action(perm.action)
+                and deny.covers_resource(perm.resource)
                 for deny in denies
             )
 

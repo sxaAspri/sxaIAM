@@ -281,9 +281,9 @@ class IngestionClient:
                 break
 
         return IAMPolicy(
-            name=raw["PolicyName"],
+            name=raw.get("PolicyName") or raw.get("Name") or raw["Arn"].split("/")[-1],
             arn=arn,
-            policy_id=raw["PolicyId"],
+            policy_id=raw.get("PolicyId") or raw.get("Id", ""),
             is_aws_managed=arn.startswith("arn:aws:iam::aws:"),
             document=document,
         )

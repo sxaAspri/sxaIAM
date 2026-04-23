@@ -28,6 +28,7 @@ class Severity(str, Enum):
     HIGH     = "HIGH"       # admin in 2-3 steps, may need another service
     MEDIUM   = "MEDIUM"     # admin possible but requires specific conditions
     LOW      = "LOW"        # limited impact or hard to exploit
+    INFO     = "INFO"       # trust policy edge — not directly exploitable
 
 
 @dataclass

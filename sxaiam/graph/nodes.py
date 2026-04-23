@@ -34,7 +34,7 @@ NODE_TYPE_ADMIN  = "admin"   # Nodo virtual — no existe en AWS
 # Clase base
 # ---------------------------------------------------------------------------
 
-@dataclass
+@dataclass(eq=True, unsafe_hash=True)
 class IAMNode:
     """
     Clase base para todos los nodos del grafo.
@@ -46,13 +46,7 @@ class IAMNode:
     label:     str          # Nombre legible: username, role name, etc.
     account_id: Optional[str] = field(default=None)
 
-    def __hash__(self) -> int:
-        return hash(self.node_id)
-
-    def __eq__(self, other: object) -> bool:
-        if not isinstance(other, IAMNode):
-            return NotImplemented
-        return self.node_id == other.node_id
+    
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(node_id={self.node_id!r}, label={self.label!r})"
@@ -62,7 +56,7 @@ class IAMNode:
 # Nodos concretos
 # ---------------------------------------------------------------------------
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class UserNode(IAMNode):
     """
     Representa un IAM User.
@@ -73,7 +67,7 @@ class UserNode(IAMNode):
     node_type: str = field(default=NODE_TYPE_USER, init=False)
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class RoleNode(IAMNode):
     """
     Representa un IAM Role.
@@ -89,7 +83,7 @@ class RoleNode(IAMNode):
     has_trust_policy: bool = field(default=False)
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class GroupNode(IAMNode):
     """
     Representa un IAM Group.
@@ -104,7 +98,7 @@ class GroupNode(IAMNode):
     node_type: str = field(default=NODE_TYPE_GROUP, init=False)
 
 
-@dataclass
+@dataclass(unsafe_hash=True)
 class PolicyNode(IAMNode):
     """
     Representa una IAM Policy (managed).
@@ -123,29 +117,20 @@ una arista de escalación. En v0.1.0 es un nodo de soporte —
 
 @dataclass
 class AdminNode(IAMNode):
-    """
-    Nodo virtual que representa el estado de AdministratorAccess.
-
-    NO existe en AWS — es un singleton sintético creado por el builder
-    para que el BFS tenga un destino concreto al que llegar.
-
-    Cualquier identidad que tenga permisos equivalentes a admin
-    (iam:* sobre *, AdministratorAccess policy, etc.) tendrá una
-    arista directa hacia este nodo.
-
-    node_id fijo: "sxaiam::admin" — nunca cambia.
-    """
-    node_id:   str = field(default="sxaiam::admin", init=False)
-    node_type: str = field(default=NODE_TYPE_ADMIN, init=False)
-    label:     str = field(default="AdministratorAccess", init=False)
-    account_id: Optional[str] = field(default=None)
-
     def __init__(self) -> None:
         # Ignoramos los parámetros de IAMNode — AdminNode es un singleton
         object.__setattr__(self, "node_id",    "sxaiam::admin")
         object.__setattr__(self, "node_type",  NODE_TYPE_ADMIN)
         object.__setattr__(self, "label",      "AdministratorAccess")
         object.__setattr__(self, "account_id", None)
+
+    def __hash__(self) -> int:
+        return hash(self.node_id)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, IAMNode):
+            return NotImplemented
+        return self.node_id == other.node_id
 
 
 # ---------------------------------------------------------------------------

@@ -215,7 +215,7 @@ class AttackGraph:
         }
 
         # 2a — Aristas de técnicas de escalación
-        self._build_technique_edges(resolved_by_arn)
+        self._build_technique_edges(resolved_by_arn, snapshot)
 
         # 2b — Aristas de trust policies (AssumeRole entre identidades)
         self._build_trust_edges(snapshot, resolved_by_arn)
@@ -223,6 +223,7 @@ class AttackGraph:
     def _build_technique_edges(
         self,
         resolved_by_arn: dict[str, ResolvedIdentity],
+        snapshot: IAMSnapshot,
     ) -> None:
         """
         Para cada identidad resuelta, corre ALL_TECHNIQUES y convierte
@@ -233,7 +234,6 @@ class AttackGraph:
 
         for identity_arn, resolved in resolved_by_arn.items():
 
-            # Si el nodo origen no existe en el grafo, saltarlo
             if identity_arn not in self._nodes:
                 logger.debug(
                     "Identidad %s no tiene nodo en el grafo — saltando",
@@ -243,46 +243,39 @@ class AttackGraph:
 
             for technique_cls in ALL_TECHNIQUES:
                 technique = technique_cls()
-                match: Optional[TechniqueMatch] = technique.check(resolved)
+                matches: list[TechniqueMatch] = technique.check(resolved, snapshot) or []
 
-                if match is None:
-                    continue
+                for match in matches:
+                    target_id = _resolve_target(match, self._nodes, admin_id)
 
-                # Determinar nodo destino:
-                # Si la técnica incluye un target_arn (ej. CreateAccessKey
-                # sobre otro usuario) la arista va a ese nodo.
-                # En todos los demás casos va directo al AdminNode.
-                target_id = _resolve_target(match, self._nodes, admin_id)
+                    evidence_dicts = [
+                        {
+                            "action":      ep,
+                            "resource":    "*",
+                            "source_type": "policy",
+                            "source_name": match.technique_name,
+                            "source_arn":  match.origin_arn,
+                        }
+                        for ep in match.evidence
+                    ]
 
-                # Serializar evidencia para los atributos de la arista
-                evidence_dicts = [
-                    {
-                        "action":      ep.action,
-                        "resource":    ep.resource,
-                        "source_type": ep.source_type,
-                        "source_name": ep.source_name,
-                        "source_arn":  ep.source_arn,
-                    }
-                    for ep in match.evidence
-                ]
+                    self._graph.add_edge(
+                        identity_arn,
+                        target_id,
+                        technique=match.technique_id,
+                        severity=match.severity.value,
+                        evidence=evidence_dicts,
+                        attack_steps=match.attack_steps,
+                        technique_match=match,
+                    )
 
-                self._graph.add_edge(
-                    identity_arn,
-                    target_id,
-                    technique=match.technique_name,
-                    severity=match.severity,
-                    evidence=evidence_dicts,
-                    attack_steps=match.attack_steps,
-                    technique_match=match,   # objeto completo para exporters
-                )
-
-                logger.debug(
-                    "Arista añadida: %s → %s [%s / %s]",
-                    identity_arn,
-                    target_id,
-                    match.technique_name,
-                    match.severity,
-                )
+                    logger.debug(
+                        "Arista añadida: %s → %s [%s / %s]",
+                        identity_arn,
+                        target_id,
+                        match.technique_id,
+                        match.severity.value,
+                    )
 
     def _build_trust_edges(
         self,

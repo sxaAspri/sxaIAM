@@ -288,22 +288,17 @@ class TestAttackGraphEdges:
         user = _make_user(user_arn, "alice")
         snap = _make_snapshot(users=[user])
 
-        ep = MagicMock()
-        ep.action      = "iam:CreatePolicyVersion"
-        ep.resource    = "*"
-        ep.source_type = "inline"
-        ep.source_name = "test-policy"
-        ep.source_arn  = f"{user_arn}/policy/test"
 
         match = MagicMock()
+        match.technique_id   = technique_name
         match.technique_name = technique_name
-        match.severity       = severity
-        match.evidence       = [ep]
+        match.severity       = MagicMock(value=severity)
+        match.evidence       = ["iam:CreatePolicyVersion on * (via inline: test-policy)"]
         match.attack_steps   = ["Step 1: do the thing"]
         match.target_arn     = None   # → AdminNode
 
         technique_instance = MagicMock()
-        technique_instance.check.return_value = match
+        technique_instance.check.return_value = [match]
 
         technique_cls = MagicMock(return_value=technique_instance)
 
@@ -341,11 +336,11 @@ class TestAttackGraphEdges:
     def test_edge_has_evidence(self):
         user_arn = "arn:aws:iam::123:user/alice"
         G = self._build_with_technique_match(
-            user_arn, "CreatePolicyVersion", "CRITICAL"
+        user_arn, "CreatePolicyVersion", "CRITICAL"
         )
         edge = G.edges[user_arn, "sxaiam::admin"]
         assert len(edge["evidence"]) == 1
-        assert edge["evidence"][0]["action"] == "iam:CreatePolicyVersion"
+        assert "iam:CreatePolicyVersion" in edge["evidence"][0]["action"]
 
     def test_edge_has_attack_steps(self):
         user_arn = "arn:aws:iam::123:user/alice"
@@ -387,16 +382,16 @@ class TestAttackGraphEdges:
 
             m = MagicMock()
             m.technique_name = name
-            m.severity       = "CRITICAL"
+            m.severity       = MagicMock(value="CRITICAL")
             m.evidence       = [ep]
             m.attack_steps   = []
             m.target_arn     = None
             return m
 
         t1 = MagicMock(return_value=MagicMock(check=MagicMock(
-            return_value=_make_match("CreatePolicyVersion"))))
+            return_value=[_make_match("CreatePolicyVersion")])))
         t2 = MagicMock(return_value=MagicMock(check=MagicMock(
-            return_value=_make_match("AttachUserPolicy"))))
+            return_value=[_make_match("AttachUserPolicy")])))
 
         with patch("sxaiam.graph.builder.ALL_TECHNIQUES", [t1, t2]):
             G = AttackGraph().build(snap, [resolved])
@@ -521,7 +516,7 @@ class TestPathFinderBasic:
         paths  = finder.find_all_paths()
 
         assert len(paths) == 1
-        assert paths[0].source_arn == user_arn
+        assert paths[0].origin_arn == user_arn
 
     def test_finds_two_hop_path(self):
         """User → Role → AdminNode en dos saltos."""
@@ -541,8 +536,10 @@ class TestPathFinderBasic:
         finder = PathFinder(G)
         paths  = finder.find_all_paths()
 
-        assert len(paths) == 1
-        assert len(paths[0].steps) == 2
+        # alice tiene ruta de 2 saltos, pivot tiene ruta de 1 salto
+        alice_paths = [p for p in paths if p.origin_arn == user_arn]
+        assert len(alice_paths) == 1
+        assert len(alice_paths[0].steps) == 2
 
     def test_no_paths_when_no_edges_to_admin(self):
         user_arn = "arn:aws:iam::123:user/alice"
@@ -612,8 +609,8 @@ class TestPathFinderSeverityOrdering:
         paths  = finder.find_all_paths()
 
         assert len(paths) == 2
-        assert paths[0].total_severity == "CRITICAL"
-        assert paths[1].total_severity == "HIGH"
+        assert paths[0].severity.value == "CRITICAL"
+        assert paths[1].severity.value == "HIGH"
 
     def test_total_severity_is_max_of_steps(self):
         """Ruta de 2 pasos: INFO + CRITICAL → total CRITICAL."""
@@ -633,8 +630,9 @@ class TestPathFinderSeverityOrdering:
         finder = PathFinder(G)
         paths  = finder.find_all_paths()
 
-        assert len(paths) == 1
-        assert paths[0].total_severity == "CRITICAL"
+        alice_paths = [p for p in paths if p.origin_arn == user_arn]
+        assert len(alice_paths) == 1
+        assert alice_paths[0].severity.value == "CRITICAL"
 
 
 class TestPathFinderCutoff:
@@ -666,8 +664,13 @@ class TestPathFinderCutoff:
         finder_strict = PathFinder(G, cutoff=4)
         finder_normal = PathFinder(G, cutoff=5)
 
-        assert finder_strict.find_all_paths() == []
-        assert len(finder_normal.find_all_paths()) == 1
+        alice_strict = [p for p in finder_strict.find_all_paths()
+                        if p.origin_arn == user_arn]
+        alice_normal = [p for p in finder_normal.find_all_paths()
+                        if p.origin_arn == user_arn]
+
+        assert alice_strict == []
+        assert len(alice_normal) == 1
 
     def test_default_cutoff_value(self):
         assert DEFAULT_CUTOFF == 5
@@ -706,4 +709,6 @@ class TestPathFinderSteps:
         finder = PathFinder(G)
         step   = finder.find_all_paths()[0].steps[0]
         assert len(step.evidence) > 0
-        assert step.evidence[0]["action"] == "iam:test"
+        # evidencia es list[str] — verificar que es string con contenido
+        assert isinstance(step.evidence[0], str)
+        assert "iam:test" in step.evidence[0]

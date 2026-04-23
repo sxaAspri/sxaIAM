@@ -71,14 +71,21 @@ class EffectivePermission:
     def covers_resource(self, resource_arn: str) -> bool:
         """
         True if this permission's resource pattern covers the given ARN.
-        Handles '*' (any) and prefix wildcards like 'arn:aws:iam::*:role/*'.
+        Handles:
+        - '*'                        → any resource
+        - 'arn:aws:iam::*:role/*'    → wildcards en segmentos intermedios
+        - 'arn:aws:s3:::my-bucket/*' → prefix wildcard al final
         """
         if self.resource == "*":
             return True
-        if self.resource.endswith("*"):
-            prefix = self.resource[:-1]
-            return resource_arn.startswith(prefix)
-        return self.resource == resource_arn
+
+        # Si no hay wildcard, comparación exacta
+        if "*" not in self.resource:
+            return self.resource == resource_arn
+
+        # Convertir el patrón a matching por segmentos
+        import fnmatch
+        return fnmatch.fnmatch(resource_arn, self.resource)
 
     def covers_action(self, action: str) -> bool:
         """
@@ -142,15 +149,21 @@ class ResolvedIdentity:
     def can(self, action: str, resource: str = "*") -> bool:
         """
         True if this identity has an effective permission that covers
-        the given action on the given resource.
-
-        This is the primary query interface for the graph engine:
-            if identity.can("iam:PassRole", role_arn): add_edge(...)
+        the given action on the given resource, and no deny blocks it.
         """
-        return any(
-            p.covers_action(action) and p.covers_resource(resource)
-            for p in self.effective_permissions
+        has_allow = any(
+        p.covers_action(action) and p.covers_resource(resource)
+        for p in self.effective_permissions
         )
+        if not has_allow:
+            return False
+
+        # Explicit deny always wins — check at query time
+        is_denied = any(
+        d.covers_action(action) and d.covers_resource(resource)
+        for d in self.denied_permissions
+        )
+        return not is_denied
 
     def permissions_for_action(self, action: str) -> list[EffectivePermission]:
         """
