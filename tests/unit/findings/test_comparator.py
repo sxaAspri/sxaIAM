@@ -158,7 +158,7 @@ class TestMissedClassification:
         path = _make_path()
         report = comp.compare([path])
         assert len(report.missed) == 1
-        assert report.missed[0].status == CoverageStatus.MISSED
+        assert report.missed[0].status == CoverageStatus.NOT_DETECTED
 
     def test_missed_path_has_gap_description(self):
         comp = SecurityHubComparator()
@@ -312,7 +312,7 @@ class TestComparisonReportMetrics:
         report = comp.compare([path])
         summary = report.summary()
         assert "1" in summary
-        assert "MISSED" in summary
+        assert "no correlated detection" in summary
         assert "100.0%" in summary
 
     def test_empty_paths_empty_report(self):

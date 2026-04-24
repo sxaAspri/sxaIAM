@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 class CoverageStatus:
-    MISSED  = "MISSED"   # sxaiam la encontró, Security Hub no la menciona
+    NOT_DETECTED  = "NOT_DETECTED"   # sxaiam la encontró, Security Hub no la menciona
     PARTIAL = "PARTIAL"  # Security Hub menciona algún permiso de la cadena
     COVERED = "COVERED"  # Security Hub cubre explícitamente la identidad
 
@@ -66,7 +66,7 @@ class PathCoverage:
 
     @property
     def is_missed(self) -> bool:
-        return self.status == CoverageStatus.MISSED
+        return self.status == CoverageStatus.NOT_DETECTED
 
     @property
     def is_partial(self) -> bool:
@@ -117,7 +117,7 @@ class ComparisonReport:
             f"sxaiam found {self.total_sxaiam_paths} escalation path(s). "
             f"Security Hub covers {len(self.covered)} fully, "
             f"{len(self.partial)} partially, "
-            f"and MISSED {len(self.missed)} "
+            f"and {len(self.missed)} with no correlated detection"
             f"({self.gap_percentage}% detection gap)."
         )
 
@@ -181,7 +181,7 @@ class ComparisonReport:
 
         if self.missed:
             lines += [
-                "## ❌ Paths Security Hub MISSED",
+                "## ❌ Paths with No Correlated Detection",
                 "",
                 "These escalation chains were found by sxaiam but have",
                 "no corresponding finding in Security Hub:",
@@ -372,7 +372,7 @@ class SecurityHubComparator:
         techniques_str = ", ".join(path.techniques_used)
         return PathCoverage(
             path=path,
-            status=CoverageStatus.MISSED,
+            status=CoverageStatus.NOT_DETECTED,
             matching_findings=[],
             gap_description=(
                 f"Security Hub has no finding for `{path.origin_name}` "
