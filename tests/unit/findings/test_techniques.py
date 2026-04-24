@@ -458,9 +458,11 @@ class TestAllTechniques:
         assert len(ids) == len(set(ids))
 
     def test_all_techniques_have_required_actions(self) -> None:
-        for technique in ALL_TECHNIQUES:
+        for technique_cls in ALL_TECHNIQUES:
+            technique = technique_cls()
             assert len(technique.required_actions) > 0
 
     def test_all_techniques_have_description(self) -> None:
-        for technique in ALL_TECHNIQUES:
+        for technique_cls in ALL_TECHNIQUES:
+            technique = technique_cls()
             assert len(technique.description) > 20

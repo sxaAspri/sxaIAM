@@ -19,7 +19,7 @@
 # Su trust policy permite ser asumido por EC2 (simula un runner de CI)
 resource "aws_iam_role" "ci_role" {
   name        = "${var.name_prefix}-ci-role"
-  description = "VULNERABLE: has sts:AssumeRole on admin_role — enables role chaining to admin"
+  description = "CI role for sxaiam test - AssumeRole chain path3"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"

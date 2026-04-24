@@ -1,0 +1,19 @@
+# Terraform
+.terraform/
+terraform.tfstate
+terraform.tfstate.backup
+*.tfstate
+*.tfstate.*
+
+# Reports generados
+report.json
+report.md
+report.graphml
+
+# Debug
+debug_iam.py
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo

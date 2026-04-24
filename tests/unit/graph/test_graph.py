@@ -60,7 +60,7 @@ def _make_snapshot(
 def _make_user(arn: str, name: str) -> MagicMock:
     u = MagicMock()
     u.arn       = arn
-    u.user_name = name
+    u.name = name
     return u
 
 
@@ -85,9 +85,9 @@ def _make_role(
         doc = MagicMock()
         doc.statements = [stmt]
 
-        role.assume_role_policy_document = doc
+        role.trust_policy = doc
     else:
-        role.assume_role_policy_document = None
+        role.trust_policy = None
 
     return role
 
@@ -108,7 +108,7 @@ def _make_resolved(
     permissions: lista de (action, resource).
     """
     resolved = MagicMock()
-    resolved.identity_arn = arn
+    resolved.arn = arn
 
     perms = []
     for action, resource in (permissions or []):
@@ -381,6 +381,7 @@ class TestAttackGraphEdges:
             ep.source_arn  = "test"
 
             m = MagicMock()
+            m.technique_id   = name
             m.technique_name = name
             m.severity       = MagicMock(value="CRITICAL")
             m.evidence       = [ep]

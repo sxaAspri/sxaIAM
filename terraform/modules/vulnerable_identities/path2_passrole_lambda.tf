@@ -21,7 +21,7 @@
 # También es el destino de las rutas 2 y 3
 resource "aws_iam_role" "admin_role" {
   name        = "${var.name_prefix}-admin-role"
-  description = "TARGET: high-privilege role — destination node for attack paths 2 and 3"
+  description = "TARGET high privilege role for attack paths 2 and 3"
 
   # Trust policy: permite ser asumido por Lambda Y por otros roles (para path 3)
   assume_role_policy = jsonencode({
@@ -49,10 +49,10 @@ resource "aws_iam_role" "admin_role" {
   })
 
   tags = {
-    AttackPath  = "path-2-passrole-lambda, path-3-assumerole-chain"
+    AttackPath  = "path-2-passrole-lambda path-3-assumerole-chain"
     Role        = "target-admin-node"
     Severity    = "CRITICAL"
-    Description = "High-privilege role — destination of multiple attack paths"
+    Description = "High-privilege role destination of multiple attack paths"
   }
 }
 

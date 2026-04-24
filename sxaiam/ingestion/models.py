@@ -28,6 +28,7 @@ class PolicyStatement(BaseModel):
     conditions: dict[str, Any] = Field(
         default_factory=dict, alias="Condition"
     )
+    principal: Any = Field(default=None)
 
     model_config = {"populate_by_name": True}
 
@@ -45,6 +46,7 @@ class PolicyStatement(BaseModel):
             actions=action if isinstance(action, list) else [action],
             resources=resource if isinstance(resource, list) else [resource],
             Condition=raw.get("Condition", {}),
+            principal=raw.get("Principal", None),
         )
 
 

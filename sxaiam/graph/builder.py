@@ -156,7 +156,7 @@ class AttackGraph:
         for user in snapshot.users:
             node = UserNode(
                 node_id=user.arn,
-                label=user.user_name,
+                label=user.name,
                 account_id=_extract_account_id(user.arn),
             )
             self._add_node(node)
@@ -166,12 +166,12 @@ class AttackGraph:
         # Roles
         for role in snapshot.roles:
             has_trust = bool(
-                role.assume_role_policy_document
-                and role.assume_role_policy_document.statements
+                role.trust_policy
+                and role.trust_policy.statements
             )
             node = RoleNode(
                 node_id=role.arn,
-                label=role.role_name,
+                label=role.name,
                 account_id=_extract_account_id(role.arn),
                 has_trust_policy=has_trust,
             )
@@ -183,7 +183,7 @@ class AttackGraph:
         for group in snapshot.groups:
             node = GroupNode(
                 node_id=group.arn,
-                label=group.group_name,
+                label=group.name,
                 account_id=_extract_account_id(group.arn),
             )
             self._add_node(node)
@@ -211,7 +211,7 @@ class AttackGraph:
         """
         # Índice rápido ARN → ResolvedIdentity
         resolved_by_arn: dict[str, ResolvedIdentity] = {
-            ri.identity_arn: ri for ri in resolved_identities
+            ri.arn: ri for ri in resolved_identities
         }
 
         # 2a — Aristas de técnicas de escalación
@@ -294,12 +294,12 @@ class AttackGraph:
         cross-account, etc.
         """
         for role in snapshot.roles:
-            if not role.assume_role_policy_document:
+            if not role.trust_policy:
                 continue
 
             role_node_id = role.arn
 
-            for stmt in role.assume_role_policy_document.statements:
+            for stmt in role.trust_policy.statements:
                 if stmt.effect != "Allow":
                     continue
 

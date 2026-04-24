@@ -183,7 +183,10 @@ class IngestionClient:
             if "PolicyDocument" in p
         }
 
-        group_names = [g["GroupName"] for g in raw.get("GroupList", [])]
+        group_names = [
+            g["GroupName"] if isinstance(g, dict) else g
+            for g in raw.get("GroupList", [])
+        ]
 
         tags = {t["Key"]: t["Value"] for t in raw.get("Tags", [])}
 

@@ -537,10 +537,10 @@ class CreateAccessKeyTechnique(EscalationTechnique):
 # Registry — all techniques available in sxaiam
 # ---------------------------------------------------------------------------
 
-ALL_TECHNIQUES: list[EscalationTechnique] = [
-    CreatePolicyVersionTechnique(),
-    PassRoleLambdaTechnique(),
-    AssumeRoleChainTechnique(),
-    AttachPolicyTechnique(),
-    CreateAccessKeyTechnique(),
+ALL_TECHNIQUES = [
+    CreatePolicyVersionTechnique,
+    PassRoleLambdaTechnique,
+    AssumeRoleChainTechnique,
+    AttachPolicyTechnique,
+    CreateAccessKeyTechnique,
 ]
