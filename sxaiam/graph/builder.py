@@ -259,6 +259,13 @@ class AttackGraph:
                         for ep in match.evidence
                     ]
 
+                    severity_rank = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "INFO": 0}
+
+                    if self._graph.has_edge(identity_arn, target_id):
+                        existing_severity = self._graph[identity_arn][target_id].get("severity", "LOW")
+                        if severity_rank.get(match.severity.value, 0) <= severity_rank.get(existing_severity, 0):
+                            continue  # mantener la arista existente de mayor severidad
+
                     self._graph.add_edge(
                         identity_arn,
                         target_id,

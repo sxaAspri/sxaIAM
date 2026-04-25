@@ -566,6 +566,299 @@ class CreateAccessKeyTechnique(EscalationTechnique):
             ))
 
         return matches
+    
+    # ---------------------------------------------------------------------------
+# Technique 6 — CreateLoginProfile (console takeover)
+# ---------------------------------------------------------------------------
+
+class CreateLoginProfileTechnique(EscalationTechnique):
+    """
+    The attacker has iam:CreateLoginProfile on a more privileged user
+    that has no console password yet. They set a password and log in
+    as that user via the AWS console.
+
+    Permissions needed:
+      - iam:CreateLoginProfile (on a target user with higher privileges)
+    """
+
+    @property
+    def technique_id(self) -> str:
+        return "create-login-profile"
+
+    @property
+    def name(self) -> str:
+        return "CreateLoginProfile console takeover"
+
+    @property
+    def severity(self) -> Severity:
+        return Severity.HIGH
+
+    @property
+    def required_actions(self) -> list[str]:
+        return ["iam:CreateLoginProfile"]
+
+    @property
+    def description(self) -> str:
+        return (
+            "The identity has iam:CreateLoginProfile on a more privileged user. "
+            "By creating a console password for that user, the attacker can "
+            "log into the AWS console as them and inherit all their permissions."
+        )
+
+    def check(self, identity, snapshot) -> list[TechniqueMatch]:
+        matches = []
+        for target_user in snapshot.users:
+            if target_user.arn == identity.arn:
+                continue
+            can_create = (
+                identity.can("iam:CreateLoginProfile", target_user.arn)
+                or identity.can("iam:CreateLoginProfile", "*")
+            )
+            if not can_create:
+                continue
+            if not target_user.attached_policies and not target_user.inline_policies:
+                continue
+            evidence = self._build_evidence(identity, ["iam:CreateLoginProfile"])
+            matches.append(TechniqueMatch(
+                technique_id=self.technique_id,
+                technique_name=self.name,
+                severity=self.severity,
+                origin_arn=identity.arn,
+                origin_name=identity.name,
+                target_arn="sxaiam::admin",
+                target_name=target_user.name,
+                description=self.description,
+                evidence=evidence,
+                attack_steps=[
+                    f"1. Call iam:CreateLoginProfile with UserName={target_user.name} and a chosen password",
+                    f"2. Log into AWS console as {target_user.name}",
+                    f"3. Operate with {target_user.name}'s full permissions",
+                ],
+            ))
+        return matches
+
+
+# ---------------------------------------------------------------------------
+# Technique 7 — UpdateLoginProfile (password reset takeover)
+# ---------------------------------------------------------------------------
+
+class UpdateLoginProfileTechnique(EscalationTechnique):
+    """
+    The attacker has iam:UpdateLoginProfile on a more privileged user
+    that already has a console password. They reset it and log in.
+
+    Permissions needed:
+      - iam:UpdateLoginProfile (on a target user with higher privileges)
+    """
+
+    @property
+    def technique_id(self) -> str:
+        return "update-login-profile"
+
+    @property
+    def name(self) -> str:
+        return "UpdateLoginProfile password reset"
+
+    @property
+    def severity(self) -> Severity:
+        return Severity.HIGH
+
+    @property
+    def required_actions(self) -> list[str]:
+        return ["iam:UpdateLoginProfile"]
+
+    @property
+    def description(self) -> str:
+        return (
+            "The identity has iam:UpdateLoginProfile on a more privileged user. "
+            "By resetting that user's console password, the attacker can log "
+            "into the AWS console as them and inherit all their permissions."
+        )
+
+    def check(self, identity, snapshot) -> list[TechniqueMatch]:
+        matches = []
+        for target_user in snapshot.users:
+            if target_user.arn == identity.arn:
+                continue
+            can_update = (
+                identity.can("iam:UpdateLoginProfile", target_user.arn)
+                or identity.can("iam:UpdateLoginProfile", "*")
+            )
+            if not can_update:
+                continue
+            if not target_user.attached_policies and not target_user.inline_policies:
+                continue
+            evidence = self._build_evidence(identity, ["iam:UpdateLoginProfile"])
+            matches.append(TechniqueMatch(
+                technique_id=self.technique_id,
+                technique_name=self.name,
+                severity=self.severity,
+                origin_arn=identity.arn,
+                origin_name=identity.name,
+                target_arn="sxaiam::admin",
+                target_name=target_user.name,
+                description=self.description,
+                evidence=evidence,
+                attack_steps=[
+                    f"1. Call iam:UpdateLoginProfile with UserName={target_user.name} and a new password",
+                    f"2. Log into AWS console as {target_user.name}",
+                    f"3. Operate with {target_user.name}'s full permissions",
+                ],
+            ))
+        return matches
+
+
+# ---------------------------------------------------------------------------
+# Technique 8 — SetDefaultPolicyVersion
+# ---------------------------------------------------------------------------
+
+class SetDefaultPolicyVersionTechnique(EscalationTechnique):
+    """
+    The attacker has iam:SetDefaultPolicyVersion on a managed policy
+    attached to themselves. If a non-default version with broader
+    permissions exists, they can activate it.
+
+    Permissions needed:
+      - iam:SetDefaultPolicyVersion (on a managed policy attached to self)
+      - iam:ListPolicyVersions (to discover available versions)
+    """
+
+    @property
+    def technique_id(self) -> str:
+        return "set-default-policy-version"
+
+    @property
+    def name(self) -> str:
+        return "SetDefaultPolicyVersion privilege swap"
+
+    @property
+    def severity(self) -> Severity:
+        return Severity.HIGH
+
+    @property
+    def required_actions(self) -> list[str]:
+        return ["iam:SetDefaultPolicyVersion", "iam:ListPolicyVersions"]
+
+    @property
+    def description(self) -> str:
+        return (
+            "The identity has iam:SetDefaultPolicyVersion on a managed policy "
+            "attached to itself. If a non-default version with broader permissions "
+            "exists (e.g. Allow *:*), the attacker can activate it to escalate."
+        )
+
+    def check(self, identity, snapshot) -> list[TechniqueMatch]:
+        matches = []
+
+        attached_arns: set[str] = set()
+        for user in snapshot.users:
+            if user.arn == identity.arn:
+                attached_arns = {p.arn for p in user.attached_policies}
+                break
+        for role in snapshot.roles:
+            if role.arn == identity.arn:
+                attached_arns = {p.arn for p in role.attached_policies}
+                break
+
+        for policy in snapshot.policies:
+            if policy.is_aws_managed:
+                continue
+            if policy.arn not in attached_arns:
+                continue
+            can_set = (
+                identity.can("iam:SetDefaultPolicyVersion", policy.arn)
+                or identity.can("iam:SetDefaultPolicyVersion", "*")
+            )
+            if not can_set:
+                continue
+            evidence = self._build_evidence(
+                identity,
+                ["iam:SetDefaultPolicyVersion", "iam:ListPolicyVersions"],
+            )
+            matches.append(TechniqueMatch(
+                technique_id=self.technique_id,
+                technique_name=self.name,
+                severity=self.severity,
+                origin_arn=identity.arn,
+                origin_name=identity.name,
+                target_arn="sxaiam::admin",
+                target_name=policy.name,
+                description=self.description,
+                evidence=evidence,
+                attack_steps=[
+                    f"1. Call iam:ListPolicyVersions on {policy.arn} to find non-default versions",
+                    f"2. Call iam:SetDefaultPolicyVersion to activate a version with Allow *:*",
+                    f"3. {identity.name} now has escalated permissions via {policy.name}",
+                ],
+            ))
+        return matches
+
+
+# ---------------------------------------------------------------------------
+# Technique 9 — AddUserToGroup
+# ---------------------------------------------------------------------------
+
+class AddUserToGroupTechnique(EscalationTechnique):
+    """
+    The attacker has iam:AddUserToGroup on a privileged group.
+    They add themselves to that group and inherit its permissions.
+
+    Permissions needed:
+      - iam:AddUserToGroup (on a target group with high privileges)
+    """
+
+    @property
+    def technique_id(self) -> str:
+        return "add-user-to-group"
+
+    @property
+    def name(self) -> str:
+        return "AddUserToGroup self-escalation"
+
+    @property
+    def severity(self) -> Severity:
+        return Severity.HIGH
+
+    @property
+    def required_actions(self) -> list[str]:
+        return ["iam:AddUserToGroup"]
+
+    @property
+    def description(self) -> str:
+        return (
+            "The identity has iam:AddUserToGroup on a privileged group. "
+            "By adding itself to that group, it inherits all the group's "
+            "permissions immediately."
+        )
+
+    def check(self, identity, snapshot) -> list[TechniqueMatch]:
+        matches = []
+        for group in snapshot.groups:
+            can_add = (
+                identity.can("iam:AddUserToGroup", group.arn)
+                or identity.can("iam:AddUserToGroup", "*")
+            )
+            if not can_add:
+                continue
+            if not group.attached_policies and not group.inline_policies:
+                continue
+            evidence = self._build_evidence(identity, ["iam:AddUserToGroup"])
+            matches.append(TechniqueMatch(
+                technique_id=self.technique_id,
+                technique_name=self.name,
+                severity=self.severity,
+                origin_arn=identity.arn,
+                origin_name=identity.name,
+                target_arn="sxaiam::admin",
+                target_name=group.name,
+                description=self.description,
+                evidence=evidence,
+                attack_steps=[
+                    f"1. Call iam:AddUserToGroup with GroupName={group.name} and UserName={identity.name}",
+                    f"2. {identity.name} immediately inherits all permissions from {group.name}",
+                ],
+            ))
+        return matches
 
 
 # ---------------------------------------------------------------------------
@@ -578,4 +871,8 @@ ALL_TECHNIQUES = [
     AssumeRoleChainTechnique,
     AttachPolicyTechnique,
     CreateAccessKeyTechnique,
+    CreateLoginProfileTechnique,
+    UpdateLoginProfileTechnique,
+    SetDefaultPolicyVersionTechnique,
+    AddUserToGroupTechnique,
 ]
