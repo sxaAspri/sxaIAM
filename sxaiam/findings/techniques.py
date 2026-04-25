@@ -235,7 +235,7 @@ class PassRoleLambdaTechnique(EscalationTechnique):
                 severity=self.severity,
                 origin_arn=identity.arn,
                 origin_name=identity.name,
-                target_arn=role.arn,
+                target_arn="sxaiam::admin",
                 target_name=role.name,
                 description=self.description,
                 evidence=evidence,
@@ -249,19 +249,18 @@ class PassRoleLambdaTechnique(EscalationTechnique):
 
         return matches
 
-    def _lambda_can_assume(self, role: "IAMRole") -> bool:  # type: ignore[name-defined]
-        """True if the role's trust policy allows lambda.amazonaws.com."""
+    def _lambda_can_assume(self, role) -> bool:
+        """True si el trust policy del rol permite lambda.amazonaws.com."""
         for stmt in role.trust_policy.statements:
             if stmt.effect != "Allow":
                 continue
-            # Check Principal for lambda service
-            # Trust policy raw principal is stored in actions for service principals
-            # We check the raw trust doc via the statement
-            for action in stmt.actions:
-                if action == "sts:AssumeRole":
-                    # The statement allows AssumeRole — check if it's for Lambda
-                    # In our models, service principals are in the raw trust doc
-                    # We check resources as a proxy (stored as principal service)
+            principal = stmt.principal
+            if not isinstance(principal, dict):
+                continue
+            service = principal.get("Service", "")
+            if isinstance(service, str):
+                service = [service]
+            if any("lambda.amazonaws.com" in s for s in service):
                     return True
         return False
 
@@ -304,6 +303,22 @@ class AssumeRoleChainTechnique(EscalationTechnique):
             "role's trust policy allows this identity to assume it. The attacker "
             "can directly pivot to the privileged role with a single API call."
         )
+    
+    def _identity_allowed_by_trust_policy(self, identity_arn: str, role) -> bool:
+        """True si la trust policy del rol permite que esta identidad lo asuma."""
+        for stmt in role.trust_policy.statements:
+            if stmt.effect != "Allow":
+                continue
+            principal = stmt.principal
+            if not isinstance(principal, dict):
+                continue
+            aws = principal.get("AWS", "")
+            if isinstance(aws, str):
+                aws = [aws]
+            for p in aws:
+                if p == identity_arn or p.endswith(":root"):
+                    return True
+        return False
 
     def check(
         self,
@@ -324,6 +339,9 @@ class AssumeRoleChainTechnique(EscalationTechnique):
             if not can_assume:
                 continue
 
+            if not self._identity_allowed_by_trust_policy(identity.arn, role):
+                continue
+
             # Role must have meaningful permissions to be worth chaining to
             if not role.attached_policies and not role.inline_policies:
                 continue
@@ -336,7 +354,7 @@ class AssumeRoleChainTechnique(EscalationTechnique):
                 severity=self.severity,
                 origin_arn=identity.arn,
                 origin_name=identity.name,
-                target_arn=role.arn,
+                target_arn="sxaiam::admin",
                 target_name=role.name,
                 description=self.description,
                 evidence=evidence,
@@ -349,6 +367,23 @@ class AssumeRoleChainTechnique(EscalationTechnique):
             ))
 
         return matches
+    
+
+    def _identity_allowed_by_trust_policy(self, identity_arn: str, role) -> bool:
+        """True si la trust policy del rol permite que esta identidad lo asuma."""
+        for stmt in role.trust_policy.statements:
+            if stmt.effect != "Allow":
+                continue
+            principal = stmt.principal
+            if not isinstance(principal, dict):
+                continue
+            aws = principal.get("AWS", "")
+            if isinstance(aws, str):
+                aws = [aws]
+            for p in aws:
+                if p == identity_arn or p.endswith(":root"):
+                    return True
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -518,7 +553,7 @@ class CreateAccessKeyTechnique(EscalationTechnique):
                 severity=self.severity,
                 origin_arn=identity.arn,
                 origin_name=identity.name,
-                target_arn=target_user.arn,
+                target_arn="sxaiam::admin",
                 target_name=target_user.name,
                 description=self.description,
                 evidence=evidence,

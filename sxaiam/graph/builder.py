@@ -327,7 +327,7 @@ class AttackGraph:
                                 "action":      "sts:AssumeRole",
                                 "resource":    role.arn,
                                 "source_type": "trust_policy",
-                                "source_name": role.role_name,
+                                "source_name": role.name,
                                 "source_arn":  role.arn,
                             }],
                             attack_steps=[
