@@ -17,3 +17,14 @@ debug_iam.py
 __pycache__/
 *.pyc
 *.pyo
+# Virtual environment
+.venv/
+
+# Debug scripts
+debug_accesskey.py
+
+# Reports con sufijo
+report_v2.json
+report*.json
+report*.md
+report*.graphml
