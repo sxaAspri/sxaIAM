@@ -198,20 +198,22 @@ sxaiam is **read-only** — it never modifies your account.
 ---
 
 ## Project structure
-sxaiam/
-├── sxaiam/
-│   ├── cli.py           # CLI entry point (Typer)
-│   ├── ingestion/       # boto3 data collection
-│   ├── resolver/        # effective permissions calculator
-│   ├── graph/           # networkx graph builder + path finder
-│   ├── findings/        # escalation technique definitions
-│   └── output/          # JSON / Markdown / GraphML exporters
-├── tests/
-│   ├── unit/            # moto-based unit tests
-│   └── integration/     # against the Terraform test environment
-├── terraform/           # deliberately vulnerable IAM sandbox
-└── docs/                # MkDocs documentation
 
+```
+sxaiam/
+  sxaiam/
+    cli.py              # CLI entry point (Typer)
+    ingestion/          # boto3 data collection
+    resolver/           # effective permissions calculator
+    graph/              # networkx graph builder + path finder
+    findings/           # escalation technique definitions
+    output/             # JSON / Markdown / GraphML exporters
+  tests/
+    unit/               # moto-based unit tests
+    integration/        # against the Terraform test environment
+  terraform/            # deliberately vulnerable IAM sandbox
+  docs/                 # MkDocs documentation
+```
 ---
 
 ## Development setup
