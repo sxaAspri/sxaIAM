@@ -1,82 +1,102 @@
 # sxaiam
 
-> AWS IAM attack path analysis — find privilege escalation chains before attackers do.
+**Security eXplainable AI for IAM Attack Mapping**
+
+> Detects privilege escalation paths in AWS IAM using graph analysis and explainable techniques.
 
 [![CI](https://github.com/sxaAspri/sxaIAM/actions/workflows/ci.yml/badge.svg)](https://github.com/sxaAspri/sxaIAM/actions)
 [![PyPI](https://img.shields.io/pypi/v/sxaiam)](https://pypi.org/project/sxaiam/)
 [![Python](https://img.shields.io/pypi/pyversions/sxaiam)](https://pypi.org/project/sxaiam/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Tests](https://img.shields.io/badge/tests-25%20passed-brightgreen)](https://github.com/sxaAspri/sxaIAM/actions)
+[![Docs](https://img.shields.io/badge/docs-mkdocs-blue)](https://sxaAspri.github.io/sxaIAM/)
 
 ---
 
 ## The problem
 
-AWS tells you what permissions exist. It doesn't tell you what an attacker can do
-with them *in combination*.
+AWS tells you what permissions exist. It doesn't tell you what an attacker can do with them *in combination*.
 
-AWS Security Hub might flag that a user has `iam:CreatePolicyVersion`. What it won't
-tell you is that this user, chaining three permissions that look harmless in isolation,
-can reach `AdministratorAccess` in two steps. That gap is what sxaiam closes.
+AWS Security Hub might flag that a user has `iam:CreatePolicyVersion`. What it won't tell you is that this user, chaining three permissions that look harmless in isolation, can reach `AdministratorAccess` in two steps. **That gap is what sxaiam closes.**
 
-```
+---
+
+## What makes sxaiam different
+
+Most tools answer: *Is this permission dangerous?*
+
+sxaiam answers:
+
+- **Can this principal become admin?**
+- **Through which path?**
+- **Why? Which permissions justify each step?**
+- **Which techniques were used?**
+
+Every finding is backed by explicit IAM permission evidence — no black box, no guessing.
+
+---
+
+## Demo
+
+```bash
 $ sxaiam scan --profile staging
+sxaiam — IAM Attack Path Analysis
+profile : staging
+output  : findings.json (json)
+cutoff  : 5 hops
 
-[sxaiam] Scanning account 123456789012...
+1/4 Collecting IAM data from AWS...
+✓ 12 users, 10 roles, 4 groups — account 123456789012
 
-  Found 3 privilege escalation paths:
+2/4 Resolving effective permissions...
+✓ 22 identities resolved
 
-  PATH 1 — CRITICAL (2 steps)
-  developer_user
-    → iam:CreatePolicyVersion  →  policy/DeploymentPolicy
-    → iam:AttachUserPolicy     →  AdministratorAccess
-  Evidence: developer_user has iam:CreatePolicyVersion on arn:aws:iam::*:policy/*
+3/4 Building attack graph and finding paths...
+✓ 27 nodes, 10 edges — 9 escalation path(s) found
 
-  PATH 2 — HIGH (3 steps)
-  ci_role
-    → iam:PassRole             →  arn:aws:iam::*:role/admin_role
-    → lambda:CreateFunction    →  executes as admin_role
-    → lambda:InvokeFunction    →  arbitrary code with admin permissions
-  Evidence: ci_role trust policy allows sts:AssumeRole from lambda.amazonaws.com
+4/4 Exporting results (json)...
+✓ Saved to findings.json
 ```
+                    Escalation Paths Found
+╭────────────┬──────────────────────────┬────────┬────────────────────────╮
+│ Severity   │ Origin                   │ Steps  │ Techniques             │
+├────────────┼──────────────────────────┼────────┼────────────────────────┤
+│ CRITICAL   │ low-priv-user            │   1    │ create-policy-version  │
+├────────────┼──────────────────────────┼────────┼────────────────────────┤
+│ CRITICAL   │ readonly-user            │   1    │ attach-policy          │
+├────────────┼──────────────────────────┼────────┼────────────────────────┤
+│ HIGH       │ developer-user           │   1    │ passrole-lambda        │
+├────────────┼──────────────────────────┼────────┼────────────────────────┤
+│ HIGH       │ contractor-user          │   1    │ add-user-to-group      │
+╰────────────┴──────────────────────────┴────────┴────────────────────────╯
 
 ---
 
 ## How it works
-
-sxaiam ingests your AWS account's IAM configuration, resolves **effective permissions**
-(accounting for SCPs, permission boundaries, and resource-based policies), builds a
-directed graph of identities and resources, and runs a path-finding algorithm to find
-all chains that lead to high-privilege nodes.
-
-Every finding is backed by explicit evidence — you can see exactly which IAM permission
-justifies each edge in the attack graph.
-
-```
 AWS account
-    │
-    ▼  (boto3 — read-only, agentless)
+│
+▼  (boto3 — read-only, agentless)
 ┌─────────────┐
-│   Ingestion  │  get_account_authorization_details + SCPs
+│   Ingestion  │  get_account_authorization_details
 └──────┬──────┘
-       │
-       ▼
-┌─────────────────┐
-│  Policy resolver │  effective permissions per identity
-└──────┬──────────┘
-       │
-       ▼
+│
+▼
+┌──────────────────┐
+│  Policy resolver  │  effective permissions per identity
+└──────┬───────────┘
+│
+▼
 ┌──────────────┐
-│ Graph engine  │  networkx DiGraph — nodes: identities/resources
+│ Graph engine  │  networkx DiGraph — nodes: identities
 └──────┬───────┘                      edges: permissions
-       │
-       ▼
+│
+▼
 ┌─────────────┐
 │  Path finder │  BFS from any identity → admin nodes
 └──────┬──────┘
-       │
-       ▼
-  JSON · Markdown · GraphML
-```
+│
+▼
+JSON · Markdown · GraphML
 
 ---
 
@@ -87,7 +107,6 @@ pip install sxaiam
 ```
 
 Requires Python 3.10+ and AWS credentials with read-only IAM access.
-The minimum required policy is in [`docs/required-policy.json`](docs/required-policy.json).
 
 ---
 
@@ -98,33 +117,61 @@ The minimum required policy is in [`docs/required-policy.json`](docs/required-po
 sxaiam scan --profile my-aws-profile --output findings.json
 ```
 
-**Scan and export as Markdown (for pentest reports):**
+**Export as Markdown for pentest reports:**
 ```bash
-sxaiam scan --profile my-aws-profile --format markdown --output report.md
+sxaiam scan --profile my-profile --format markdown --output report.md
 ```
 
-**Export the attack graph (for Gephi / Neo4j / visualization):**
+**Export the attack graph:**
 ```bash
-sxaiam scan --profile my-aws-profile --format graphml --output graph.graphml
+sxaiam scan --profile my-profile --format graphml --output graph.graphml
 ```
 
-**Compare findings against AWS Security Hub:**
+**Compare against AWS Security Hub:**
 ```bash
 sxaiam compare findings.json --region us-east-1
 ```
 
 **Use as a Python library:**
 ```python
-from sxaiam.ingestion import IAMSnapshot
-from sxaiam.graph import AttackGraph
+import boto3
+from sxaiam.ingestion.client import IngestionClient
+from sxaiam.resolver.engine import PolicyResolver
+from sxaiam.graph.builder import AttackGraph
+from sxaiam.graph.pathfinder import PathFinder
 
-snapshot = IAMSnapshot.from_profile("my-profile")
-graph = AttackGraph.from_snapshot(snapshot)
+session = boto3.Session(profile_name="my-profile")
+client = IngestionClient(session=session)
+snapshot = client.collect()
 
-paths = graph.find_escalation_paths(origin="arn:aws:iam::123:user/developer")
+resolver = PolicyResolver(snapshot)
+resolved = resolver.resolve_all()
+
+graph = AttackGraph()
+G = graph.build(snapshot, list(resolved.values()))
+
+finder = PathFinder(G)
+paths = finder.find_all_paths()
+
 for path in paths:
     print(path.summary())
 ```
+
+---
+
+## Escalation techniques covered
+
+| Technique | Severity | Key permissions |
+|---|---|---|
+| CreatePolicyVersion swap | CRITICAL | `iam:CreatePolicyVersion` |
+| AttachUserPolicy / AttachRolePolicy | CRITICAL | `iam:AttachUserPolicy`, `iam:AttachRolePolicy` |
+| PassRole + Lambda execution | HIGH | `iam:PassRole`, `lambda:CreateFunction` |
+| AssumeRole chaining | HIGH | `sts:AssumeRole` |
+| CreateAccessKey credential takeover | HIGH | `iam:CreateAccessKey` |
+| CreateLoginProfile console takeover | HIGH | `iam:CreateLoginProfile` |
+| UpdateLoginProfile password reset | HIGH | `iam:UpdateLoginProfile` |
+| SetDefaultPolicyVersion privilege swap | HIGH | `iam:SetDefaultPolicyVersion` |
+| AddUserToGroup self-escalation | HIGH | `iam:AddUserToGroup` |
 
 ---
 
@@ -133,20 +180,18 @@ for path in paths:
 | Feature | sxaiam | PMapper | Cloudsplaining | Ermetic |
 |---|---|---|---|---|
 | Attack path chaining | ✅ | ✅ (basic) | ❌ | ✅ |
-| Offensive perspective | ✅ | partial | ❌ | ❌ |
 | Full evidence per finding | ✅ | ❌ | ❌ | ❌ |
-| Effective permissions (SCPs) | ✅ | partial | ❌ | ✅ |
+| Offensive perspective | ✅ | partial | ❌ | ❌ |
 | Security Hub comparison | ✅ | ❌ | ❌ | ❌ |
 | Open source | ✅ | ✅ | ✅ | ❌ |
-| Free | ✅ | ✅ | ✅ | ❌ (SaaS) |
+| Free | ✅ | ✅ | ✅ | ❌ |
 | Active maintenance | ✅ | ❌ | partial | N/A |
 
 ---
 
 ## IAM permissions required
 
-sxaiam is **read-only**. It never modifies your account.
-The minimum required permissions are:
+sxaiam is **read-only** — it never modifies your account.
 
 ```json
 {
@@ -168,27 +213,9 @@ The minimum required permissions are:
   ]
 }
 ```
-
----
-
-## Escalation techniques covered
-
-sxaiam currently models the following IAM privilege escalation classes:
-
-- `CreatePolicyVersion` — replace a managed policy with an Allow \*:\* version
-- `AttachUserPolicy` / `AttachRolePolicy` — attach AdministratorAccess to self
-- `PassRole` + `lambda:CreateFunction` — execute code as a more privileged role
-- `sts:AssumeRole` chaining — pivot through roles with permissive trust policies
-- `UpdateLoginProfile` / `CreateAccessKey` — credential takeover of a privileged user
-
-Coverage is documented explicitly. If a technique is not yet modeled, it is listed
-in [`docs/technique-coverage.md`](docs/technique-coverage.md) as a known gap.
-
 ---
 
 ## Project structure
-
-```
 sxaiam/
 ├── sxaiam/
 │   ├── cli.py           # CLI entry point (Typer)
@@ -198,11 +225,10 @@ sxaiam/
 │   ├── findings/        # escalation technique definitions
 │   └── output/          # JSON / Markdown / GraphML exporters
 ├── tests/
-│   ├── unit/            # moto-based AWS mocks, no real credentials needed
+│   ├── unit/            # moto-based unit tests
 │   └── integration/     # against the Terraform test environment
-├── terraform/           # deliberately vulnerable IAM test environment
-└── docs/
-```
+├── terraform/           # deliberately vulnerable IAM sandbox
+└── docs/                # MkDocs documentation
 
 ---
 
@@ -211,7 +237,8 @@ sxaiam/
 ```bash
 git clone https://github.com/sxaAspri/sxaIAM
 cd sxaIAM
-python -m venv .venv && source .venv/bin/activate
+python -m venv .venv
+source .venv/bin/activate  # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 
 # Run tests (no AWS credentials needed)
@@ -224,10 +251,16 @@ mypy sxaiam/
 
 ---
 
+## Documentation
+
+Full documentation available at **[sxaAspri.github.io/sxaIAM](https://sxaAspri.github.io/sxaIAM/)**.
+
+---
+
 ## Contributing
 
 Contributions are welcome — especially new escalation techniques.
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the architecture principles and PR process.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for architecture principles and the PR process.
 
 ---
 
@@ -240,5 +273,4 @@ MIT — see [LICENSE](LICENSE).
 ## References
 
 - [Rhino Security Labs — AWS IAM Privilege Escalation Methods](https://rhinosecuritylabs.com/aws/aws-privilege-escalation-methods-mitigation/)
-- [MITRE ATT&CK for Cloud — Privilege Escalation (TA0004)](https://attack.mitre.org/tactics/TA0004/)
-- [AWS IAM Policy Evaluation Logic](https://docs.aws.amazon.com/IAM/latest/UserGuide/reference_policies_evaluation-logic.html)
+- [AWS IAM documentation](https://docs.aws.amazon.com/IAM/latest/UserGuide/)
