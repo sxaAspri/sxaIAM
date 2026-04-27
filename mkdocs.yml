@@ -1,0 +1,37 @@
+site_name: sxaiam
+site_description: AWS IAM attack path analysis — find privilege escalation chains before attackers do
+site_url: https://sxaAspri.github.io/sxaIAM
+repo_url: https://github.com/sxaAspri/sxaIAM
+repo_name: sxaAspri/sxaIAM
+
+theme:
+  name: material
+  palette:
+    - scheme: slate
+      primary: red
+      accent: orange
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - content.code.copy
+  icon:
+    repo: fontawesome/brands/github
+
+nav:
+  - Home: index.md
+  - Getting Started:
+    - Installation: installation.md
+    - Quickstart: quickstart.md
+  - Reference:
+    - Techniques: techniques.md
+    - Architecture: architecture.md
+  - Contributing: contributing.md
+
+markdown_extensions:
+  - admonition
+  - pymdownx.superfences
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.inlinehilite
+  - tables
+  - attr_list
