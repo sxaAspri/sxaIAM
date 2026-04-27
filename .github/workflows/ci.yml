@@ -8,20 +8,21 @@ on:
 
 jobs:
   lint:
-    name: Lint
+    name: Lint & Type Check
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install ruff mypy
+      - run: pip install -e ".[dev]"
       - run: ruff check sxaiam/
-      - run: mypy sxaiam/
+      - run: mypy sxaiam/ --ignore-missing-imports
 
   test:
     name: Tests (Python ${{ matrix.python-version }})
     runs-on: ubuntu-latest
+    needs: lint
     strategy:
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
@@ -31,4 +32,4 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e ".[dev]"
-      - run: pytest
+      - run: pytest --cov=sxaiam --cov-report=term-missing
