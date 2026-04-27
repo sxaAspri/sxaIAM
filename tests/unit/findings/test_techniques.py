@@ -20,8 +20,12 @@ from sxaiam.findings.techniques import (
     AssumeRoleChainTechnique,
     AttachPolicyTechnique,
     CreateAccessKeyTechnique,
+    CreateLoginProfileTechnique,
     CreatePolicyVersionTechnique,
     PassRoleLambdaTechnique,
+    SetDefaultPolicyVersionTechnique,
+    UpdateLoginProfileTechnique,
+    AddUserToGroupTechnique,
 )
 from sxaiam.resolver.engine import PolicyResolver
 from sxaiam.resolver.models import IdentityType, ResolvedIdentity
@@ -32,7 +36,7 @@ from sxaiam.resolver.models import IdentityType, ResolvedIdentity
 # ---------------------------------------------------------------------------
 
 def make_doc(actions: list[str], resources: list[str],
-             effect: str = "Allow") -> PolicyDocument:
+            effect: str = "Allow") -> PolicyDocument:
     return PolicyDocument.from_raw({
         "Version": "2012-10-17",
         "Statement": [{"Effect": effect, "Action": actions, "Resource": resources}],
@@ -216,8 +220,8 @@ class TestPassRoleLambda:
         matches = PassRoleLambdaTechnique().check(identity, snapshot)
 
         assert len(matches) >= 1
-        target_arns = [m.target_arn for m in matches]
-        assert admin_role.arn in target_arns
+        assert len(matches) >= 1
+        assert any(m.target_name == admin_role.name for m in matches) 
 
     def test_no_match_without_lambda_create(self) -> None:
         admin_role = IAMRole(
@@ -268,7 +272,7 @@ class TestAssumeRoleChain:
             name="admin-role",
             arn="arn:aws:iam::123:role/admin-role",
             role_id="RID3",
-            trust_policy=make_trust_doc(),
+            trust_policy=make_role_trust_doc("arn:aws:iam::123:role/ci-role"),
             attached_policies=[AttachedPolicy(
                 PolicyName="AdministratorAccess",
                 PolicyArn="arn:aws:iam::aws:policy/AdministratorAccess",
@@ -295,7 +299,7 @@ class TestAssumeRoleChain:
         matches = AssumeRoleChainTechnique().check(identity, snapshot)
 
         assert len(matches) >= 1
-        assert any(m.target_arn == admin_role.arn for m in matches)
+        assert any(m.target_name == admin_role.name for m in matches)
 
     def test_no_match_without_assumerole_permission(self) -> None:
         admin_role = IAMRole(
@@ -421,7 +425,8 @@ class TestCreateAccessKey:
         matches = CreateAccessKeyTechnique().check(identity, snapshot)
 
         assert len(matches) == 1
-        assert matches[0].target_arn == privileged_user.arn
+        assert matches[0].target_arn == "sxaiam::admin"
+        assert matches[0].target_name == privileged_user.name
         assert matches[0].origin_name == "support-user"
 
     def test_no_match_on_self(self) -> None:
@@ -445,16 +450,370 @@ class TestCreateAccessKey:
 
 
 # ---------------------------------------------------------------------------
+# Technique 6 — CreateLoginProfile
+# ---------------------------------------------------------------------------
+
+class TestCreateLoginProfile:
+
+    def _setup(self) -> tuple[IAMUser, IAMUser, IAMSnapshot]:
+        target_policy = make_policy(
+            "PowerUser", "arn:aws:iam::aws:policy/PowerUserAccess", "s3:*"
+        )
+        target_user = IAMUser(
+            name="admin-console-user",
+            arn="arn:aws:iam::123:user/admin-console-user",
+            user_id="UID10",
+            attached_policies=[AttachedPolicy(
+                PolicyName="PowerUserAccess",
+                PolicyArn="arn:aws:iam::aws:policy/PowerUserAccess",
+            )],
+        )
+        helpdesk_policy = IAMPolicy(
+            name="HelpdeskPerms",
+            arn="arn:aws:iam::123:policy/HelpdeskPerms",
+            policy_id="PID4",
+            is_aws_managed=False,
+            document=make_doc(
+                ["iam:CreateLoginProfile"],
+                [target_user.arn],
+            ),
+        )
+        helpdesk_user = IAMUser(
+            name="helpdesk-user",
+            arn="arn:aws:iam::123:user/helpdesk-user",
+            user_id="UID11",
+            attached_policies=[AttachedPolicy(
+                PolicyName="HelpdeskPerms",
+                PolicyArn="arn:aws:iam::123:policy/HelpdeskPerms",
+            )],
+        )
+        snapshot = make_snapshot(
+            users=[helpdesk_user, target_user],
+            policies=[helpdesk_policy, target_policy],
+        )
+        return helpdesk_user, target_user, snapshot
+
+    def test_detects_create_login_profile(self) -> None:
+        from sxaiam.findings.techniques import CreateLoginProfileTechnique
+        helpdesk_user, target_user, snapshot = self._setup()
+        identity = resolve_user(helpdesk_user, snapshot)
+        matches = CreateLoginProfileTechnique().check(identity, snapshot)
+
+        assert len(matches) == 1
+        assert matches[0].origin_name == "helpdesk-user"
+        assert matches[0].target_name == "admin-console-user"
+        assert matches[0].severity == Severity.HIGH
+
+    def test_no_match_on_self(self) -> None:
+        from sxaiam.findings.techniques import CreateLoginProfileTechnique
+        policy = make_policy(
+            "SelfLogin", "arn:aws:iam::123:policy/SelfLogin",
+            "iam:CreateLoginProfile",
+        )
+        user = IAMUser(
+            name="user",
+            arn="arn:aws:iam::123:user/user",
+            user_id="UID12",
+            attached_policies=[AttachedPolicy(
+                PolicyName="SelfLogin",
+                PolicyArn="arn:aws:iam::123:policy/SelfLogin",
+            )],
+        )
+        snapshot = make_snapshot(users=[user], policies=[policy])
+        identity = resolve_user(user, snapshot)
+        matches = CreateLoginProfileTechnique().check(identity, snapshot)
+        assert len(matches) == 0
+
+    def test_no_match_when_target_has_no_permissions(self) -> None:
+        from sxaiam.findings.techniques import CreateLoginProfileTechnique
+        target_user = IAMUser(
+            name="empty-user",
+            arn="arn:aws:iam::123:user/empty-user",
+            user_id="UID13",
+            attached_policies=[],
+        )
+        helpdesk_policy = IAMPolicy(
+            name="HelpdeskPerms2",
+            arn="arn:aws:iam::123:policy/HelpdeskPerms2",
+            policy_id="PID5",
+            is_aws_managed=False,
+            document=make_doc(["iam:CreateLoginProfile"], [target_user.arn]),
+        )
+        helpdesk_user = IAMUser(
+            name="helpdesk-user2",
+            arn="arn:aws:iam::123:user/helpdesk-user2",
+            user_id="UID14",
+            attached_policies=[AttachedPolicy(
+                PolicyName="HelpdeskPerms2",
+                PolicyArn="arn:aws:iam::123:policy/HelpdeskPerms2",
+            )],
+        )
+        snapshot = make_snapshot(
+            users=[helpdesk_user, target_user],
+            policies=[helpdesk_policy],
+        )
+        identity = resolve_user(helpdesk_user, snapshot)
+        matches = CreateLoginProfileTechnique().check(identity, snapshot)
+        assert len(matches) == 0
+
+
+# ---------------------------------------------------------------------------
+# Technique 7 — UpdateLoginProfile
+# ---------------------------------------------------------------------------
+
+class TestUpdateLoginProfile:
+
+    def test_detects_update_login_profile(self) -> None:
+        from sxaiam.findings.techniques import UpdateLoginProfileTechnique
+        target_policy = make_policy(
+            "ReadOnly", "arn:aws:iam::aws:policy/ReadOnlyAccess", "s3:Get*"
+        )
+        target_user = IAMUser(
+            name="finance-user",
+            arn="arn:aws:iam::123:user/finance-user",
+            user_id="UID15",
+            attached_policies=[AttachedPolicy(
+                PolicyName="ReadOnlyAccess",
+                PolicyArn="arn:aws:iam::aws:policy/ReadOnlyAccess",
+            )],
+        )
+        reset_policy = IAMPolicy(
+            name="PasswordResetPerms",
+            arn="arn:aws:iam::123:policy/PasswordResetPerms",
+            policy_id="PID6",
+            is_aws_managed=False,
+            document=make_doc(["iam:UpdateLoginProfile"], [target_user.arn]),
+        )
+        reset_user = IAMUser(
+            name="password-reset-user",
+            arn="arn:aws:iam::123:user/password-reset-user",
+            user_id="UID16",
+            attached_policies=[AttachedPolicy(
+                PolicyName="PasswordResetPerms",
+                PolicyArn="arn:aws:iam::123:policy/PasswordResetPerms",
+            )],
+        )
+        snapshot = make_snapshot(
+            users=[reset_user, target_user],
+            policies=[reset_policy, target_policy],
+        )
+        identity = resolve_user(reset_user, snapshot)
+        matches = UpdateLoginProfileTechnique().check(identity, snapshot)
+
+        assert len(matches) == 1
+        assert matches[0].origin_name == "password-reset-user"
+        assert matches[0].target_name == "finance-user"
+        assert matches[0].severity == Severity.HIGH
+
+    def test_no_match_without_permission(self) -> None:
+        from sxaiam.findings.techniques import UpdateLoginProfileTechnique
+        policy = make_policy(
+            "SafePerms2", "arn:aws:iam::123:policy/SafePerms2", "s3:GetObject"
+        )
+        user = IAMUser(
+            name="safe-user2",
+            arn="arn:aws:iam::123:user/safe-user2",
+            user_id="UID17",
+            attached_policies=[AttachedPolicy(
+                PolicyName="SafePerms2",
+                PolicyArn="arn:aws:iam::123:policy/SafePerms2",
+            )],
+        )
+        snapshot = make_snapshot(users=[user], policies=[policy])
+        identity = resolve_user(user, snapshot)
+        matches = UpdateLoginProfileTechnique().check(identity, snapshot)
+        assert len(matches) == 0
+
+
+# ---------------------------------------------------------------------------
+# Technique 8 — SetDefaultPolicyVersion
+# ---------------------------------------------------------------------------
+
+class TestSetDefaultPolicyVersion:
+
+    def test_detects_set_default_policy_version(self) -> None:
+        from sxaiam.findings.techniques import SetDefaultPolicyVersionTechnique
+        flex_policy = IAMPolicy(
+            name="FlexPolicy",
+            arn="arn:aws:iam::123:policy/FlexPolicy",
+            policy_id="PID7",
+            is_aws_managed=False,
+            document=make_doc(["s3:GetObject"], ["*"]),
+        )
+        manager_policy = IAMPolicy(
+            name="PolicyManagerPerms",
+            arn="arn:aws:iam::123:policy/PolicyManagerPerms",
+            policy_id="PID8",
+            is_aws_managed=False,
+            document=make_doc(
+                ["iam:SetDefaultPolicyVersion", "iam:ListPolicyVersions"],
+                [flex_policy.arn],
+            ),
+        )
+        manager_user = IAMUser(
+            name="policy-manager-user",
+            arn="arn:aws:iam::123:user/policy-manager-user",
+            user_id="UID18",
+            attached_policies=[
+                AttachedPolicy(
+                    PolicyName="FlexPolicy",
+                    PolicyArn="arn:aws:iam::123:policy/FlexPolicy",
+                ),
+                AttachedPolicy(
+                    PolicyName="PolicyManagerPerms",
+                    PolicyArn="arn:aws:iam::123:policy/PolicyManagerPerms",
+                ),
+            ],
+        )
+        snapshot = make_snapshot(
+            users=[manager_user],
+            policies=[flex_policy, manager_policy],
+        )
+        identity = resolve_user(manager_user, snapshot)
+        matches = SetDefaultPolicyVersionTechnique().check(identity, snapshot)
+
+        assert len(matches) >= 1
+        assert matches[0].severity == Severity.HIGH
+        assert matches[0].origin_name == "policy-manager-user"
+
+    def test_no_match_when_policy_not_attached(self) -> None:
+        from sxaiam.findings.techniques import SetDefaultPolicyVersionTechnique
+        flex_policy = IAMPolicy(
+            name="FlexPolicy2",
+            arn="arn:aws:iam::123:policy/FlexPolicy2",
+            policy_id="PID9",
+            is_aws_managed=False,
+            document=make_doc(["s3:GetObject"], ["*"]),
+        )
+        manager_policy = IAMPolicy(
+            name="PolicyManagerPerms2",
+            arn="arn:aws:iam::123:policy/PolicyManagerPerms2",
+            policy_id="PID10",
+            is_aws_managed=False,
+            document=make_doc(
+                ["iam:SetDefaultPolicyVersion"],
+                [flex_policy.arn],
+            ),
+        )
+        manager_user = IAMUser(
+            name="manager-user2",
+            arn="arn:aws:iam::123:user/manager-user2",
+            user_id="UID19",
+            attached_policies=[
+                AttachedPolicy(
+                    PolicyName="PolicyManagerPerms2",
+                    PolicyArn="arn:aws:iam::123:policy/PolicyManagerPerms2",
+                ),
+                # FlexPolicy2 NOT attached — no debe detectar
+            ],
+        )
+        snapshot = make_snapshot(
+            users=[manager_user],
+            policies=[flex_policy, manager_policy],
+        )
+        identity = resolve_user(manager_user, snapshot)
+        matches = SetDefaultPolicyVersionTechnique().check(identity, snapshot)
+        assert len(matches) == 0
+
+
+# ---------------------------------------------------------------------------
+# Technique 9 — AddUserToGroup
+# ---------------------------------------------------------------------------
+
+class TestAddUserToGroup:
+
+    def test_detects_add_user_to_group(self) -> None:
+        from sxaiam.ingestion.models import IAMGroup
+        from sxaiam.findings.techniques import AddUserToGroupTechnique
+
+        admin_policy = make_policy(
+            "AdminAccess", "arn:aws:iam::aws:policy/AdministratorAccess", "*"
+        )
+        admin_group = IAMGroup(
+            name="admin-group",
+            arn="arn:aws:iam::123:group/admin-group",
+            group_id="GID1",
+            attached_policies=[AttachedPolicy(
+                PolicyName="AdministratorAccess",
+                PolicyArn="arn:aws:iam::aws:policy/AdministratorAccess",
+            )],
+        )
+        contractor_policy = IAMPolicy(
+            name="ContractorPerms",
+            arn="arn:aws:iam::123:policy/ContractorPerms",
+            policy_id="PID11",
+            is_aws_managed=False,
+            document=make_doc(["iam:AddUserToGroup"], [admin_group.arn]),
+        )
+        contractor_user = IAMUser(
+            name="contractor-user",
+            arn="arn:aws:iam::123:user/contractor-user",
+            user_id="UID20",
+            attached_policies=[AttachedPolicy(
+                PolicyName="ContractorPerms",
+                PolicyArn="arn:aws:iam::123:policy/ContractorPerms",
+            )],
+        )
+        snapshot = make_snapshot(
+            users=[contractor_user],
+            policies=[contractor_policy, admin_policy],
+        )
+        snapshot.groups = [admin_group]
+        identity = resolve_user(contractor_user, snapshot)
+        matches = AddUserToGroupTechnique().check(identity, snapshot)
+
+        assert len(matches) >= 1
+        assert matches[0].origin_name == "contractor-user"
+        assert matches[0].target_name == "admin-group"
+        assert matches[0].severity == Severity.HIGH
+
+    def test_no_match_when_group_has_no_policies(self) -> None:
+        from sxaiam.ingestion.models import IAMGroup
+        from sxaiam.findings.techniques import AddUserToGroupTechnique
+
+        empty_group = IAMGroup(
+            name="empty-group",
+            arn="arn:aws:iam::123:group/empty-group",
+            group_id="GID2",
+            attached_policies=[],
+        )
+        contractor_policy = IAMPolicy(
+            name="ContractorPerms2",
+            arn="arn:aws:iam::123:policy/ContractorPerms2",
+            policy_id="PID12",
+            is_aws_managed=False,
+            document=make_doc(["iam:AddUserToGroup"], [empty_group.arn]),
+        )
+        contractor_user = IAMUser(
+            name="contractor-user2",
+            arn="arn:aws:iam::123:user/contractor-user2",
+            user_id="UID21",
+            attached_policies=[AttachedPolicy(
+                PolicyName="ContractorPerms2",
+                PolicyArn="arn:aws:iam::123:policy/ContractorPerms2",
+            )],
+        )
+        snapshot = make_snapshot(
+            users=[contractor_user],
+            policies=[contractor_policy],
+        )
+        snapshot.groups = [empty_group]
+        identity = resolve_user(contractor_user, snapshot)
+        matches = AddUserToGroupTechnique().check(identity, snapshot)
+        assert len(matches) == 0
+
+
+# ---------------------------------------------------------------------------
 # ALL_TECHNIQUES registry
 # ---------------------------------------------------------------------------
 
 class TestAllTechniques:
 
-    def test_registry_has_five_techniques(self) -> None:
-        assert len(ALL_TECHNIQUES) == 5
+    def test_registry_has_nine_techniques(self) -> None:
+        assert len(ALL_TECHNIQUES) == 9
 
     def test_all_techniques_have_unique_ids(self) -> None:
-        ids = [t.technique_id for t in ALL_TECHNIQUES]
+        ids = [t().technique_id for t in ALL_TECHNIQUES]
         assert len(ids) == len(set(ids))
 
     def test_all_techniques_have_required_actions(self) -> None:
