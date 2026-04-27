@@ -40,64 +40,46 @@ Every finding is backed by explicit IAM permission evidence — no black box, no
 
 ```bash
 $ sxaiam scan --profile staging
+
 sxaiam — IAM Attack Path Analysis
-profile : staging
-output  : findings.json (json)
-cutoff  : 5 hops
+  profile : staging
+  output  : findings.json (json)
+  cutoff  : 5 hops
 
 1/4 Collecting IAM data from AWS...
-✓ 12 users, 10 roles, 4 groups — account 123456789012
-
+  ✓ 12 users, 10 roles, 4 groups — account 123456789012
 2/4 Resolving effective permissions...
-✓ 22 identities resolved
-
+  ✓ 22 identities resolved
 3/4 Building attack graph and finding paths...
-✓ 27 nodes, 10 edges — 9 escalation path(s) found
-
+  ✓ 27 nodes, 10 edges — 9 escalation path(s) found
 4/4 Exporting results (json)...
-✓ Saved to findings.json
-```
-                    Escalation Paths Found
-╭────────────┬──────────────────────────┬────────┬────────────────────────╮
-│ Severity   │ Origin                   │ Steps  │ Techniques             │
-├────────────┼──────────────────────────┼────────┼────────────────────────┤
-│ CRITICAL   │ low-priv-user            │   1    │ create-policy-version  │
-├────────────┼──────────────────────────┼────────┼────────────────────────┤
-│ CRITICAL   │ readonly-user            │   1    │ attach-policy          │
-├────────────┼──────────────────────────┼────────┼────────────────────────┤
-│ HIGH       │ developer-user           │   1    │ passrole-lambda        │
-├────────────┼──────────────────────────┼────────┼────────────────────────┤
-│ HIGH       │ contractor-user          │   1    │ add-user-to-group      │
-╰────────────┴──────────────────────────┴────────┴────────────────────────╯
+  ✓ Saved to findings.json
 
----
+Escalation Paths Found:
+  [CRITICAL] low-priv-user      → create-policy-version
+  [CRITICAL] readonly-user      → attach-policy
+  [HIGH]     developer-user     → passrole-lambda
+  [HIGH]     contractor-user    → add-user-to-group
+```
 
 ## How it works
-AWS account
-│
-▼  (boto3 — read-only, agentless)
-┌─────────────┐
-│   Ingestion  │  get_account_authorization_details
-└──────┬──────┘
-│
-▼
-┌──────────────────┐
-│  Policy resolver  │  effective permissions per identity
-└──────┬───────────┘
-│
-▼
-┌──────────────┐
-│ Graph engine  │  networkx DiGraph — nodes: identities
-└──────┬───────┘                      edges: permissions
-│
-▼
-┌─────────────┐
-│  Path finder │  BFS from any identity → admin nodes
-└──────┬──────┘
-│
-▼
-JSON · Markdown · GraphML
 
+```
+AWS account
+    │
+    ▼  boto3 — read-only, agentless
+    │
+Ingestion      →  get_account_authorization_details
+    │
+Policy resolver  →  effective permissions per identity
+    │
+Graph engine   →  networkx DiGraph (nodes: identities, edges: permissions)
+    │
+Path finder    →  BFS from any identity to admin nodes
+    │
+    ▼
+JSON · Markdown · GraphML
+```
 ---
 
 ## Install
