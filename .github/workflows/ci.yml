@@ -17,7 +17,7 @@ jobs:
           python-version: "3.11"
       - run: pip install -e ".[dev]"
       - run: ruff check sxaiam/
-      - run: mypy sxaiam/ --ignore-missing-imports
+      - run: mypy sxaiam/ --ignore-missing-imports --explicit-package-bases
 
   test:
     name: Tests (Python ${{ matrix.python-version }})

@@ -66,3 +66,9 @@ strict = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["sxaiam"]
+
+[tool.mypy]
+python_version = "3.10"
+strict = false
+ignore_missing_imports = true
+explicit_package_bases = true
