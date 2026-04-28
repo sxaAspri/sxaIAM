@@ -127,7 +127,34 @@ def _make_role(
 
 @pytest.fixture(scope="module")
 def sandbox_snapshot() -> IAMSnapshot:
-    low_priv = _make_user(LOW_PRIV_ARN, "low_priv_user", ["iam:CreatePolicyVersion"])
+    from sxaiam.ingestion.models import AttachedPolicy
+
+    # Política target para CreatePolicyVersion
+    deployment_policy = IAMPolicy(
+        name="DeploymentPolicy",
+        arn=f"arn:aws:iam::{ACCOUNT_ID}:policy/DeploymentPolicy",
+        policy_id="PID-DEPLOY",
+        is_aws_managed=False,
+        document=_inline_doc(["ec2:DescribeInstances"]),
+    )
+
+    # low_priv_user con CreatePolicyVersion + DeploymentPolicy adjunta
+    low_priv = IAMUser(
+        arn=LOW_PRIV_ARN,
+        name="low_priv_user",
+        user_id="AIDALOWPRIV",
+        path="/",
+        inline_policies={"sandbox-policy": _inline_doc([
+            "iam:CreatePolicyVersion",
+            "iam:SetDefaultPolicyVersion",
+        ])},
+        attached_policies=[AttachedPolicy(
+            PolicyName="DeploymentPolicy",
+            PolicyArn=f"arn:aws:iam::{ACCOUNT_ID}:policy/DeploymentPolicy",
+        )],
+        group_names=[],
+    )
+
     developer = _make_user(DEV_ARN, "developer_user", [
         "iam:PassRole",
         "lambda:CreateFunction",
@@ -148,14 +175,32 @@ def sandbox_snapshot() -> IAMSnapshot:
         trust_principals=[CI_ROLE_ARN],
     )
 
-    snapshot = IAMSnapshot(
-        account_id="123456789012",
-        users=[low_priv, developer, readonly, support, privileged],
-        roles=[ci_role, admin_role],
-        groups=[],
-        policies=[],
+    # Rol con trust de Lambda para PassRoleLambda
+    lambda_role = IAMRole(
+        arn=f"arn:aws:iam::{ACCOUNT_ID}:role/lambda-exec-role",
+        name="lambda-exec-role",
+        role_id="AROALAMBDA",
+        path="/",
+        trust_policy=PolicyDocument(statements=[
+            PolicyStatement(
+                Effect="Allow",
+                actions=["sts:AssumeRole"],
+                resources=["*"],
+                principal={"Service": "lambda.amazonaws.com"},
+            )
+        ]),
+        inline_policies={"lambda-policy": _inline_doc(["s3:GetObject"])},
+        attached_policies=[],
     )
-    snapshot.build_indexes()  # ← fix crítico
+
+    snapshot = IAMSnapshot(
+        account_id=ACCOUNT_ID,
+        users=[low_priv, developer, readonly, support, privileged],
+        roles=[ci_role, admin_role, lambda_role],
+        groups=[],
+        policies=[deployment_policy],
+    )
+    snapshot.build_indexes()
     return snapshot
 
 
