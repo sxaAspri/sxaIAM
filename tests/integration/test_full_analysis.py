@@ -43,6 +43,7 @@ from sxaiam.ingestion.models import (
 from sxaiam.resolver.engine import PolicyResolver
 from sxaiam.resolver.models import EffectivePermission, ResolvedIdentity
 
+
 # ---------------------------------------------------------------------------
 # Constantes del sandbox
 # ---------------------------------------------------------------------------
@@ -190,7 +191,10 @@ def sandbox_snapshot() -> IAMSnapshot:
             )
         ]),
         inline_policies={"lambda-policy": _inline_doc(["s3:GetObject"])},
-        attached_policies=[],
+        attached_policies=[AttachedPolicy(
+            PolicyName="PowerUserAccess",
+            PolicyArn="arn:aws:iam::aws:policy/PowerUserAccess",
+    )],
     )
 
     snapshot = IAMSnapshot(
