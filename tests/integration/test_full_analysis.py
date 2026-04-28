@@ -128,53 +128,36 @@ def _make_role(
 
 @pytest.fixture(scope="module")
 def sandbox_snapshot() -> IAMSnapshot:
-    """
-    IAMSnapshot que replica el sandbox Terraform con las 5 identidades
-    vulnerables. Cada identidad tiene exactamente los permisos que
-    activan su técnica de escalación.
-    """
-    # path1: low_priv_user con iam:CreatePolicyVersion
     low_priv = _make_user(LOW_PRIV_ARN, "low_priv_user", ["iam:CreatePolicyVersion"])
-
-    # path2: developer_user con iam:PassRole + lambda:CreateFunction + InvokeFunction
     developer = _make_user(DEV_ARN, "developer_user", [
         "iam:PassRole",
         "lambda:CreateFunction",
         "lambda:InvokeFunction",
     ])
-
-    # path4: readonly_user con iam:AttachUserPolicy
     readonly = _make_user(READONLY_ARN, "readonly_user", ["iam:AttachUserPolicy"])
-
-    # path5: support_user con iam:CreateAccessKey (sobre otro usuario)
     support = _make_user(SUPPORT_ARN, "support_user", ["iam:CreateAccessKey"])
-
-    # privileged_user — víctima de path5 (support puede crear sus access keys)
     privileged = _make_user(PRIV_USER_ARN, "privileged_user", ["*"])
 
-    # path3: ci_role con sts:AssumeRole hacia admin_role
     ci_role = _make_role(
-        CI_ROLE_ARN,
-        "ci_role",
+        CI_ROLE_ARN, "ci_role",
         inline_actions=["sts:AssumeRole"],
-        trust_principals=[DEV_ARN],   # developer puede asumir ci_role
+        trust_principals=[DEV_ARN],
     )
-
-    # admin_role — destino de ci_role (tiene permisos admin)
     admin_role = _make_role(
-        ADMIN_ROLE_ARN,
-        "admin_role",
+        ADMIN_ROLE_ARN, "admin_role",
         inline_actions=["*"],
-        trust_principals=[CI_ROLE_ARN],  # ci_role puede asumir admin_role
+        trust_principals=[CI_ROLE_ARN],
     )
 
-    return IAMSnapshot(
+    snapshot = IAMSnapshot(
         account_id="123456789012",
         users=[low_priv, developer, readonly, support, privileged],
         roles=[ci_role, admin_role],
         groups=[],
         policies=[],
-)
+    )
+    snapshot.build_indexes()  # ← fix crítico
+    return snapshot
 
 
 @pytest.fixture(scope="module")
