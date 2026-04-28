@@ -116,7 +116,7 @@ def _make_role(
         name=name,
         role_id=f"AROA{name.upper()[:12]}",
         path="/",
-        assume_role_policy_document=trust_doc,
+        trust_policy=trust_doc,
         inline_policies={"sandbox-policy": _inline_doc(inline_actions)} if inline_actions else {},
         attached_policies=[],
     )
@@ -169,19 +169,19 @@ def sandbox_snapshot() -> IAMSnapshot:
     )
 
     return IAMSnapshot(
+        account_id="123456789012",
         users=[low_priv, developer, readonly, support, privileged],
         roles=[ci_role, admin_role],
         groups=[],
-        managed_policies=[],
-        scps=[],
-    )
+        policies=[],
+)
 
 
 @pytest.fixture(scope="module")
 def resolved_identities(sandbox_snapshot: IAMSnapshot) -> list[ResolvedIdentity]:
     """Resuelve permisos efectivos para todas las identidades del snapshot."""
     resolver = PolicyResolver(sandbox_snapshot)
-    return resolver.resolve_all()
+    return list(resolver.resolve_all().values())
 
 
 @pytest.fixture(scope="module")
