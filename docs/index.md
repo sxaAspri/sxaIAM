@@ -29,30 +29,22 @@ Every finding is backed by explicit IAM permission evidence — no black box, no
 
 ## How it works
 
+```
 AWS account
-│
-▼  (boto3 — read-only, agentless)
-┌─────────────┐
-│   Ingestion  │  get_account_authorization_details
-└──────┬──────┘
-│
-▼
-┌──────────────────┐
-│  Policy resolver  │  effective permissions per identity
-└──────┬───────────┘
-│
-▼
-┌──────────────┐
-│ Graph engine  │  networkx DiGraph
-└──────┬───────┘
-│
-▼
-┌─────────────┐
-│  Path finder │  BFS → admin nodes
-└──────┬──────┘
-│
-▼
+    │
+    ▼  boto3 — read-only, agentless
+    │
+Ingestion      →  get_account_authorization_details
+    │
+Policy resolver  →  effective permissions per identity
+    │
+Graph engine   →  networkx DiGraph (nodes: identities, edges: permissions)
+    │
+Path finder    →  BFS from any identity to admin nodes
+    │
+    ▼
 JSON · Markdown · GraphML
+```
 
 ---
 
