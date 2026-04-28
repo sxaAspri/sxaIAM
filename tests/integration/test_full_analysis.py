@@ -199,41 +199,34 @@ class TestFivePathsDetected:
         )
 
     def test_create_policy_version_detected(self, escalation_paths: list):
-        """path1: CreatePolicyVersion debe aparecer en alguna ruta."""
         techniques = self._get_techniques(escalation_paths)
-        assert any("CreatePolicyVersion" in t for t in techniques), (
-            f"CreatePolicyVersion no detectado. Técnicas encontradas: {techniques}"
-        )
+        assert "create-policy-version" in techniques, (
+            f"CreatePolicyVersion no detectado. Técnicas: {techniques}"
+    )
 
     def test_passrole_lambda_detected(self, escalation_paths: list):
-        """path2: PassRole+Lambda debe aparecer en alguna ruta."""
         techniques = self._get_techniques(escalation_paths)
-        assert any("PassRole" in t or "Lambda" in t for t in techniques), (
-            f"PassRole+Lambda no detectado. Técnicas encontradas: {techniques}"
-        )
+        assert "passrole-lambda" in techniques, (
+            f"PassRole+Lambda no detectado. Técnicas: {techniques}"
+    )
 
     def test_attach_policy_detected(self, escalation_paths: list):
-        """path4: AttachUserPolicy debe aparecer en alguna ruta."""
         techniques = self._get_techniques(escalation_paths)
-        assert any("Attach" in t for t in techniques), (
-            f"AttachPolicy no detectado. Técnicas encontradas: {techniques}"
-        )
+        assert "attach-policy" in techniques, (
+            f"AttachPolicy no detectado. Técnicas: {techniques}"
+    )
 
     def test_create_access_key_detected(self, escalation_paths: list):
-        """path5: CreateAccessKey debe aparecer en alguna ruta."""
         techniques = self._get_techniques(escalation_paths)
-        assert any("AccessKey" in t or "CreateAccessKey" in t for t in techniques), (
-            f"CreateAccessKey no detectado. Técnicas encontradas: {techniques}"
-        )
+        assert "create-access-key" in techniques, (
+            f"CreateAccessKey no detectado. Técnicas: {techniques}"
+    )
 
     def test_asume_role_chain_or_trust_detected(self, escalation_paths: list):
-        """path3: AssumeRole chain debe aparecer como técnica o trust_policy."""
         techniques = self._get_techniques(escalation_paths)
-        assert any(
-            "AssumeRole" in t or "trust_policy" in t for t in techniques
-        ), (
-            f"AssumeRole/trust_policy no detectado. Técnicas encontradas: {techniques}"
-        )
+        assert "assumerole-chain" in techniques or "trust_policy" in techniques, (
+            f"AssumeRole/trust_policy no detectado. Técnicas: {techniques}"
+    )
 
     def test_low_priv_user_has_path(self, escalation_paths: list):
         """low_priv_user debe tener al menos una ruta de escalación."""
