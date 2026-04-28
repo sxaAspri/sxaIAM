@@ -83,7 +83,7 @@ def _inline_doc(actions: list[str], resources: list[str] | None = None) -> Polic
 def _make_user(arn: str, name: str, inline_actions: list[str]) -> IAMUser:
     return IAMUser(
         arn=arn,
-        user_name=name,
+        name=name,
         user_id=f"AIDA{name.upper()[:12]}",
         path="/",
         inline_policies={"sandbox-policy": _inline_doc(inline_actions)},
