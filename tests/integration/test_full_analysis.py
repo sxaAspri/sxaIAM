@@ -113,7 +113,7 @@ def _make_role(
         )
     return IAMRole(
         arn=arn,
-        role_name=name,
+        name=name,
         role_id=f"AROA{name.upper()[:12]}",
         path="/",
         assume_role_policy_document=trust_doc,
