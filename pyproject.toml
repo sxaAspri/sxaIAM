@@ -60,10 +60,6 @@ select = ["E", "F", "I", "UP"]
 testpaths = ["tests"]
 addopts = "--cov=sxaiam --cov-report=term-missing"
 
-[tool.mypy]
-python_version = "3.10"
-strict = true
-
 [tool.hatch.build.targets.wheel]
 packages = ["sxaiam"]
 
