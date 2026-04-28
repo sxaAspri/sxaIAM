@@ -66,11 +66,11 @@ PRIV_USER_ARN   = f"arn:aws:iam::{ACCOUNT_ID}:user/privileged_user"
 
 def _stmt(effect: str, actions: list[str], resources: list[str]) -> PolicyStatement:
     return PolicyStatement(
-        effect=effect,
-        action=actions,
-        resource=resources,
+        Effect=effect,
+        actions=actions,
+        resources=resources,
         principal=None,
-        condition=None,
+        
     )
 
 
@@ -88,7 +88,7 @@ def _make_user(arn: str, name: str, inline_actions: list[str]) -> IAMUser:
         path="/",
         inline_policies={"sandbox-policy": _inline_doc(inline_actions)},
         attached_policies=[],
-        groups=[],
+        group_names=[],
     )
 
 
@@ -103,11 +103,10 @@ def _make_role(
         trust_doc = PolicyDocument(
             statements=[
                 PolicyStatement(
-                    effect="Allow",
-                    action=["sts:AssumeRole"],
-                    resource=["*"],
+                    Effect="Allow",
+                    actions=["sts:AssumeRole"],
+                    resources=["*"],
                     principal={"AWS": trust_principals},
-                    condition=None,
                 )
             ]
         )
