@@ -37,7 +37,6 @@ Estructura de una arista (atributos del DiGraph):
 from __future__ import annotations
 
 import logging
-from typing import Optional
 
 import networkx as nx
 
@@ -47,7 +46,6 @@ from sxaiam.graph.nodes import (
     AdminNode,
     GroupNode,
     IAMNode,
-    NODE_TYPE_ADMIN,
     RoleNode,
     UserNode,
 )
@@ -262,8 +260,13 @@ class AttackGraph:
                     severity_rank = {"CRITICAL": 4, "HIGH": 3, "MEDIUM": 2, "LOW": 1, "INFO": 0}
 
                     if self._graph.has_edge(identity_arn, target_id):
-                        existing_severity = self._graph[identity_arn][target_id].get("severity", "LOW")
-                        if severity_rank.get(match.severity.value, 0) <= severity_rank.get(existing_severity, 0):
+                        existing_severity = (
+                            self._graph[identity_arn][target_id].get("severity", "LOW")
+                        )
+                        if (
+                            severity_rank.get(match.severity.value, 0)
+                            <= severity_rank.get(existing_severity, 0)
+                            ):
                             continue  # mantener la arista existente de mayor severidad
 
                     self._graph.add_edge(
@@ -355,7 +358,7 @@ class AttackGraph:
 # Helpers
 # ---------------------------------------------------------------------------
 
-def _extract_account_id(arn: str) -> Optional[str]:
+def _extract_account_id(arn: str) -> str | None:
     """
     Extrae el account ID de un ARN de AWS.
     arn:aws:iam::123456789012:user/alice → "123456789012"
@@ -380,7 +383,7 @@ def _resolve_target(
     Si el match tiene target_arn y ese ARN existe como nodo, la arista
     apunta a ese nodo. En cualquier otro caso, apunta al AdminNode.
     """
-    target_arn: Optional[str] = getattr(match, "target_arn", None)
+    target_arn: str | None = getattr(match, "target_arn", None)
     if target_arn and target_arn in nodes:
         return target_arn
     return admin_id

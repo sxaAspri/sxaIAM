@@ -162,7 +162,7 @@ class ComparisonReport:
         lines = [
             "# sxaiam vs AWS Security Hub — Detection Gap Report",
             "",
-            f"## Summary",
+            "## Summary",
             "",
             f"> {self.summary()}",
             "",
@@ -359,7 +359,10 @@ class SecurityHubComparator:
             gap = (
                 "Security Hub flags the identity but misses the escalation chain."
                 if has_origin_match
-                else "Security Hub flags a dangerous permission but doesn't link it to this identity."
+                else (
+                "Security Hub flags a dangerous permission but "
+                "doesn't link it to this identity."
+                )
             )
             return PathCoverage(
                 path=path,

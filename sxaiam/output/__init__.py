@@ -18,9 +18,9 @@ Uso típico:
     md_exp.export(paths, Path("report.md"))
 """
 
+from sxaiam.output.graphml_exporter import GraphMLExporter
 from sxaiam.output.json_exporter import JSONExporter
 from sxaiam.output.markdown_exporter import MarkdownExporter
-from sxaiam.output.graphml_exporter import GraphMLExporter
 
 __all__ = [
     "JSONExporter",

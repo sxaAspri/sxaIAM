@@ -30,7 +30,6 @@ from __future__ import annotations
 
 import logging
 import uuid
-from typing import Optional
 
 import networkx as nx
 
@@ -160,7 +159,7 @@ class PathFinder:
     def _sequence_to_escalation_path(
         self,
         node_sequence: list[str],
-    ) -> Optional[EscalationPath]:
+    ) -> EscalationPath | None:
         """
         Convierte una secuencia de node_ids en un EscalationPath.
         """
@@ -231,9 +230,9 @@ class PathFinder:
     # Helpers internos
     # ------------------------------------------------------------------
 
-    def _find_admin_node(self) -> Optional[str]:
+    def _find_admin_node(self) -> str | None:
         for node_id, data in self._graph.nodes(data=True):
-            node_obj: Optional[IAMNode] = data.get("node")
+            node_obj: IAMNode | None = data.get("node")
             if node_obj and node_obj.node_type == NODE_TYPE_ADMIN:
                 return node_id
         logger.warning("AdminNode no encontrado en el grafo")
@@ -247,7 +246,7 @@ class PathFinder:
 def _get_node_label(graph: nx.DiGraph, node_id: str) -> str:
     """Devuelve el label del nodo o el node_id si no tiene label."""
     data = graph.nodes.get(node_id, {})
-    node_obj: Optional[IAMNode] = data.get("node")
+    node_obj: IAMNode | None = data.get("node")
     if node_obj:
         return node_obj.label
     return node_id

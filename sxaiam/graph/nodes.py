@@ -15,8 +15,6 @@ Cada nodo tiene:
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
-
 
 # ---------------------------------------------------------------------------
 # Constantes de tipo — el pathfinder y el builder usan estas constantes,
@@ -44,7 +42,7 @@ class IAMNode:
     node_id:   str          # ARN de AWS o identificador sintético (AdminNode)
     node_type: str          # Una de las constantes NODE_TYPE_*
     label:     str          # Nombre legible: username, role name, etc.
-    account_id: Optional[str] = field(default=None)
+    account_id: str | None = field(default=None)
 
     
 

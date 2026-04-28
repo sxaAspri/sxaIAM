@@ -16,7 +16,7 @@ Changelog vs v0.1.0:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 from sxaiam.findings.technique_base import Severity, TechniqueMatch
 
@@ -80,7 +80,7 @@ class EscalationPath:
     target_name:    str
     steps:          list[PathStep]          = field(default_factory=list)
     tags:           list[str]               = field(default_factory=list)
-    technique_match: Optional[TechniqueMatch] = field(default=None)
+    technique_match: TechniqueMatch | None = field(default=None)
     # technique_match: TechniqueMatch primario de la ruta.
     # Poblado por el PathFinder con el primer match real (no trust_policy).
     # Usado por exporters de Fase 4 para metadata adicional.
@@ -99,7 +99,11 @@ class EscalationPath:
             to_name=match.target_name,
             technique_id=match.technique_id,
             technique_name=match.technique_name,
-            severity=match.severity.value if isinstance(match.severity, Severity) else str(match.severity),
+            severity=(
+            match.severity.value
+            if isinstance(match.severity, Severity)
+            else str(match.severity)
+            ),
             evidence=match.evidence,
             api_calls=match.attack_steps,
         )

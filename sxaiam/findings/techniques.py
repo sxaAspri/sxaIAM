@@ -241,7 +241,7 @@ class PassRoleLambdaTechnique(EscalationTechnique):
                 evidence=evidence,
                 attack_steps=[
                     f"1. Call lambda:CreateFunction with Role={role.arn}",
-                    f"2. Function runtime: call sts:GetCallerIdentity to confirm role",
+                    "2. Function runtime: call sts:GetCallerIdentity to confirm role",
                     f"3. Call lambda:InvokeFunction to execute arbitrary code as {role.name}",
                     f"4. {role.name} has {len(role.attached_policies)} attached policies",
                 ],
@@ -559,8 +559,8 @@ class CreateAccessKeyTechnique(EscalationTechnique):
                 evidence=evidence,
                 attack_steps=[
                     f"1. Call iam:CreateAccessKey with UserName={target_user.name}",
-                    f"2. Store the returned AccessKeyId and SecretAccessKey",
-                    f"3. Configure AWS CLI with the new credentials",
+                    "2. Store the returned AccessKeyId and SecretAccessKey",
+                    "3. Configure AWS CLI with the new credentials",
                     f"4. Operate as {target_user.name} with their full permissions",
                 ],
             ))
@@ -630,7 +630,8 @@ class CreateLoginProfileTechnique(EscalationTechnique):
                 description=self.description,
                 evidence=evidence,
                 attack_steps=[
-                    f"1. Call iam:CreateLoginProfile with UserName={target_user.name} and a chosen password",
+                    f"1. Call iam:CreateLoginProfile with UserName={target_user.name}"
+                    " and a chosen password",
                     f"2. Log into AWS console as {target_user.name}",
                     f"3. Operate with {target_user.name}'s full permissions",
                 ],
@@ -700,7 +701,8 @@ class UpdateLoginProfileTechnique(EscalationTechnique):
                 description=self.description,
                 evidence=evidence,
                 attack_steps=[
-                    f"1. Call iam:UpdateLoginProfile with UserName={target_user.name} and a new password",
+                    f"1. Call iam:UpdateLoginProfile with UserName={target_user.name}"
+                    " and a new password",
                     f"2. Log into AWS console as {target_user.name}",
                     f"3. Operate with {target_user.name}'s full permissions",
                 ],
@@ -787,7 +789,7 @@ class SetDefaultPolicyVersionTechnique(EscalationTechnique):
                 evidence=evidence,
                 attack_steps=[
                     f"1. Call iam:ListPolicyVersions on {policy.arn} to find non-default versions",
-                    f"2. Call iam:SetDefaultPolicyVersion to activate a version with Allow *:*",
+                    "2. Call iam:SetDefaultPolicyVersion to activate a version with Allow *:*",
                     f"3. {identity.name} now has escalated permissions via {policy.name}",
                 ],
             ))
@@ -854,7 +856,8 @@ class AddUserToGroupTechnique(EscalationTechnique):
                 description=self.description,
                 evidence=evidence,
                 attack_steps=[
-                    f"1. Call iam:AddUserToGroup with GroupName={group.name} and UserName={identity.name}",
+                    f"1. Call iam:AddUserToGroup with GroupName={group.name}"
+                    f" and UserName={identity.name}",
                     f"2. {identity.name} immediately inherits all permissions from {group.name}",
                 ],
             ))

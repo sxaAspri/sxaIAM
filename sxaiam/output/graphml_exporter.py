@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
-from typing import Optional
 
 import networkx as nx
 
@@ -98,7 +97,7 @@ class GraphMLExporter:
 
         # Nodos — extraer atributos del objeto IAMNode
         for node_id, data in graph.nodes(data=True):
-            node_obj: Optional[IAMNode] = data.get("node")
+            node_obj: IAMNode | None = data.get("node")
             if node_obj:
                 export_graph.add_node(
                     node_id,

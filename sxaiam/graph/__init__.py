@@ -27,15 +27,15 @@ Uso típico:
 
 from sxaiam.graph.builder import AttackGraph
 from sxaiam.graph.nodes import (
-    AdminNode,
-    GroupNode,
-    IAMNode,
     NODE_TYPE_ADMIN,
     NODE_TYPE_GROUP,
     NODE_TYPE_POLICY,
     NODE_TYPE_ROLE,
     NODE_TYPE_USER,
     NODE_TYPES,
+    AdminNode,
+    GroupNode,
+    IAMNode,
     PolicyNode,
     RoleNode,
     UserNode,

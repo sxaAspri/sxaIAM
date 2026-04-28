@@ -17,7 +17,7 @@ from typing import Any
 import boto3
 from botocore.exceptions import ClientError
 
-from sxaiam.ingestion.models import PolicyDocument, SCP
+from sxaiam.ingestion.models import SCP, PolicyDocument
 
 logger = logging.getLogger(__name__)
 

@@ -10,13 +10,12 @@ Commands:
 from __future__ import annotations
 
 import json
-import sys
 from pathlib import Path
 
 import typer
+from rich import box
 from rich.console import Console
 from rich.table import Table
-from rich import box
 
 app = typer.Typer(
     name="sxaiam",
@@ -361,7 +360,11 @@ def _print_executive_scoring(report) -> None:
         if c.path.severity.value == "CRITICAL"
     )
 
-    gap_color = "red" if report.gap_percentage > 50 else "yellow" if report.gap_percentage > 20 else "green"
+    gap_color = (
+    "red" if report.gap_percentage > 50
+    else "yellow" if report.gap_percentage > 20
+    else "green"
+)
 
     table.add_row("sxaiam paths found",         str(report.total_sxaiam_paths))
     table.add_row("Security Hub findings loaded", str(report.total_sh_findings))
