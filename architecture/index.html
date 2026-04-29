@@ -868,21 +868,12 @@
 <p>sxaiam is built around four independent modules that communicate through
 well-defined interfaces. Each module can be used independently as a Python library.</p>
 <h2 id="overview">Overview</h2>
-<p>┌─────────────────────────────────────────────────────┐
-│                    sxaiam pipeline                   │
-│                                                     │
-│  ┌───────────┐    ┌──────────┐    ┌─────────────┐  │
-│  │ Ingestion  │───▶│ Resolver │───▶│ Graph engine│  │
-│  └───────────┘    └──────────┘    └──────┬──────┘  │
-│                                          │          │
-│                                   ┌──────▼──────┐  │
-│                                   │  Path finder │  │
-│                                   └──────┬──────┘  │
-│                                          │          │
-│                                   ┌──────▼──────┐  │
-│                                   │   Exporters  │  │
-│                                   └─────────────┘  │
-└─────────────────────────────────────────────────────┘</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>flowchart LR
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    A[Ingestion] --&gt; B[Resolver]
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>    B --&gt; C[Graph Engine]
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>    C --&gt; D[Path Finder]
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>    D --&gt; E[Exporters]
+</code></pre></div>
 <h2 id="module-ingestion-sxaiamingestion">Module: Ingestion (<code>sxaiam/ingestion/</code>)</h2>
 <p><strong>Responsibility:</strong> collect raw IAM data from AWS via boto3.</p>
 <p>The core call is <code>iam:GetAccountAuthorizationDetails</code>, which returns users, roles,
@@ -944,16 +935,16 @@ The graph engine, resolver, and ingestion modules never contain technique-specif
 </ol>
 <hr />
 <h2 id="data-flow-example">Data flow example</h2>
-<p>IngestionClient.collect()
-→ IAMSnapshot(users=[...], roles=[...], policies=[...])
-PolicyResolver(snapshot).resolve_all()
-→ {arn: ResolvedIdentity, ...}
-AttackGraph.build(snapshot, resolved_identities)
-→ networkx.DiGraph with nodes and edges
-PathFinder(graph).find_all_paths()
-→ [EscalationPath, ...]
-JsonExporter.export(paths)
-→ findings.json</p>
+<p>IngestionClient.collect()</p>
+<p>→ IAMSnapshot(users=[...], roles=[...], policies=[...])
+PolicyResolver(snapshot).resolve_all()</p>
+<p>→ {arn: ResolvedIdentity, ...}
+AttackGraph.build(snapshot, resolved_identities)</p>
+<p>→ networkx.DiGraph with nodes and edges
+PathFinder(graph).find_all_paths()</p>
+<p>→ [EscalationPath, ...]
+JsonExporter.export(paths)</p>
+<p>→ findings.json</p>
 
 
 
