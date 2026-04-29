@@ -935,17 +935,21 @@ The graph engine, resolver, and ingestion modules never contain technique-specif
 </ol>
 <hr />
 <h2 id="data-flow-example">Data flow example</h2>
-<p>```text
-IngestionClient.collect()
-→ IAMSnapshot(users=[...], roles=[...], policies=[...])</p>
-<p>PolicyResolver(snapshot).resolve_all()
-→ {arn: ResolvedIdentity, ...}</p>
-<p>AttackGraph.build(snapshot, resolved_identities)
-→ networkx.DiGraph with nodes and edges</p>
-<p>PathFinder(graph).find_all_paths()
-→ [EscalationPath, ...]</p>
-<p>JsonExporter.export(paths)
-→ findings.json</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>IngestionClient.collect()
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>→ IAMSnapshot(users=[...], roles=[...], policies=[...])
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>PolicyResolver(snapshot).resolve_all()
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>→ {arn: ResolvedIdentity, ...}
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>AttackGraph.build(snapshot, resolved_identities)
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>→ networkx.DiGraph with nodes and edges
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>PathFinder(graph).find_all_paths()
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>→ [EscalationPath, ...]
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>JsonExporter.export(paths)
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>→ findings.json
+</code></pre></div>
 
 
 
