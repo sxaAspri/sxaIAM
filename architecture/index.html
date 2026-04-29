@@ -935,16 +935,17 @@ The graph engine, resolver, and ingestion modules never contain technique-specif
 </ol>
 <hr />
 <h2 id="data-flow-example">Data flow example</h2>
-<p>IngestionClient.collect()</p>
-<p>→ IAMSnapshot(users=[...], roles=[...], policies=[...])
-PolicyResolver(snapshot).resolve_all()</p>
-<p>→ {arn: ResolvedIdentity, ...}
-AttackGraph.build(snapshot, resolved_identities)</p>
-<p>→ networkx.DiGraph with nodes and edges
-PathFinder(graph).find_all_paths()</p>
-<p>→ [EscalationPath, ...]
-JsonExporter.export(paths)</p>
-<p>→ findings.json</p>
+<p>```text
+IngestionClient.collect()
+→ IAMSnapshot(users=[...], roles=[...], policies=[...])</p>
+<p>PolicyResolver(snapshot).resolve_all()
+→ {arn: ResolvedIdentity, ...}</p>
+<p>AttackGraph.build(snapshot, resolved_identities)
+→ networkx.DiGraph with nodes and edges</p>
+<p>PathFinder(graph).find_all_paths()
+→ [EscalationPath, ...]</p>
+<p>JsonExporter.export(paths)
+→ findings.json</p>
 
 
 
