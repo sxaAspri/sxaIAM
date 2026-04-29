@@ -884,15 +884,15 @@
 </code></pre></div>
 <h2 id="aws-profile-setup">AWS profile setup</h2>
 <p>sxaiam uses standard boto3 credential resolution. The recommended approach is named profiles:</p>
-<p>```ini~/.aws/credentials
-[my-audit-profile]
-aws_access_key_id = AKIA...
-aws_secret_access_key = ...
-region = us-east-1</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>ini~/.aws/credentials
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>[my-audit-profile]
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>aws_access_key_id = AKIA...
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>aws_secret_access_key = ...
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>region = us-east-1
+</code></pre></div>
 <p>Then pass the profile name to sxaiam:</p>
-<p>bash
-<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>sxaiam scan --profile my-audit-profile
-</code></pre></div></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>sxaiam scan --profile my-audit-profile
+</code></pre></div>
 
 
 
