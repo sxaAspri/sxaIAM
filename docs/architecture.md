@@ -4,21 +4,15 @@ sxaiam is built around four independent modules that communicate through
 well-defined interfaces. Each module can be used independently as a Python library.
 
 ## Overview
-┌─────────────────────────────────────────────────────┐
-│                    sxaiam pipeline                   │
-│                                                     │
-│  ┌───────────┐    ┌──────────┐    ┌─────────────┐  │
-│  │ Ingestion  │───▶│ Resolver │───▶│ Graph engine│  │
-│  └───────────┘    └──────────┘    └──────┬──────┘  │
-│                                          │          │
-│                                   ┌──────▼──────┐  │
-│                                   │  Path finder │  │
-│                                   └──────┬──────┘  │
-│                                          │          │
-│                                   ┌──────▼──────┐  │
-│                                   │   Exporters  │  │
-│                                   └─────────────┘  │
-└─────────────────────────────────────────────────────┘
+
+```mermaid
+flowchart LR
+    A[Ingestion] --> B[Resolver]
+    B --> C[Graph Engine]
+    C --> D[Path Finder]
+    D --> E[Exporters]
+
+```
 
 ## Module: Ingestion (`sxaiam/ingestion/`)
 
@@ -109,13 +103,19 @@ These rules were established at the start of the project and are non-negotiable:
 
 ## Data flow example
 
+```text
 IngestionClient.collect()
 → IAMSnapshot(users=[...], roles=[...], policies=[...])
+
 PolicyResolver(snapshot).resolve_all()
 → {arn: ResolvedIdentity, ...}
+
 AttackGraph.build(snapshot, resolved_identities)
 → networkx.DiGraph with nodes and edges
+
 PathFinder(graph).find_all_paths()
 → [EscalationPath, ...]
+
 JsonExporter.export(paths)
 → findings.json
+```
