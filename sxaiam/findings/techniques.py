@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from sxaiam.findings.registry import TechniqueRegistry
 from sxaiam.findings.technique_base import (
     EscalationTechnique,
     Severity,
@@ -151,6 +152,9 @@ class CreatePolicyVersionTechnique(EscalationTechnique):
         return False
 
 
+TechniqueRegistry.register(CreatePolicyVersionTechnique())
+
+
 # ---------------------------------------------------------------------------
 # Technique 2 — PassRole + Lambda
 # ---------------------------------------------------------------------------
@@ -263,6 +267,9 @@ class PassRoleLambdaTechnique(EscalationTechnique):
             if any("lambda.amazonaws.com" in s for s in service):
                     return True
         return False
+
+
+TechniqueRegistry.register(PassRoleLambdaTechnique())
 
 
 # ---------------------------------------------------------------------------
@@ -386,6 +393,9 @@ class AssumeRoleChainTechnique(EscalationTechnique):
         return False
 
 
+TechniqueRegistry.register(AssumeRoleChainTechnique())
+
+
 # ---------------------------------------------------------------------------
 # Technique 4 — AttachUserPolicy / AttachRolePolicy
 # ---------------------------------------------------------------------------
@@ -485,6 +495,9 @@ class AttachPolicyTechnique(EscalationTechnique):
         return matches
 
 
+TechniqueRegistry.register(AttachPolicyTechnique())
+
+
 # ---------------------------------------------------------------------------
 # Technique 5 — CreateAccessKey (credential takeover)
 # ---------------------------------------------------------------------------
@@ -566,6 +579,9 @@ class CreateAccessKeyTechnique(EscalationTechnique):
             ))
 
         return matches
+
+
+TechniqueRegistry.register(CreateAccessKeyTechnique())
     
     # ---------------------------------------------------------------------------
 # Technique 6 — CreateLoginProfile (console takeover)
@@ -639,6 +655,9 @@ class CreateLoginProfileTechnique(EscalationTechnique):
         return matches
 
 
+TechniqueRegistry.register(CreateLoginProfileTechnique())
+
+
 # ---------------------------------------------------------------------------
 # Technique 7 — UpdateLoginProfile (password reset takeover)
 # ---------------------------------------------------------------------------
@@ -708,6 +727,9 @@ class UpdateLoginProfileTechnique(EscalationTechnique):
                 ],
             ))
         return matches
+
+
+TechniqueRegistry.register(UpdateLoginProfileTechnique())
 
 
 # ---------------------------------------------------------------------------
@@ -796,6 +818,9 @@ class SetDefaultPolicyVersionTechnique(EscalationTechnique):
         return matches
 
 
+TechniqueRegistry.register(SetDefaultPolicyVersionTechnique())
+
+
 # ---------------------------------------------------------------------------
 # Technique 9 — AddUserToGroup
 # ---------------------------------------------------------------------------
@@ -864,18 +889,9 @@ class AddUserToGroupTechnique(EscalationTechnique):
         return matches
 
 
+TechniqueRegistry.register(AddUserToGroupTechnique())
+
+
 # ---------------------------------------------------------------------------
 # Registry — all techniques available in sxaiam
 # ---------------------------------------------------------------------------
-
-ALL_TECHNIQUES = [
-    CreatePolicyVersionTechnique,
-    PassRoleLambdaTechnique,
-    AssumeRoleChainTechnique,
-    AttachPolicyTechnique,
-    CreateAccessKeyTechnique,
-    CreateLoginProfileTechnique,
-    UpdateLoginProfileTechnique,
-    SetDefaultPolicyVersionTechnique,
-    AddUserToGroupTechnique,
-]

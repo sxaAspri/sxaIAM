@@ -283,7 +283,7 @@ class TestAttackGraphEdges:
     ) -> nx.DiGraph:
         """
         Construye un grafo con una técnica que detecta escalación.
-        Mockea ALL_TECHNIQUES para devolver un match controlado.
+        Mockea TechniqueRegistry.all() para devolver un match controlado.
         """
         user = _make_user(user_arn, "alice")
         snap = _make_snapshot(users=[user])
@@ -300,11 +300,12 @@ class TestAttackGraphEdges:
         technique_instance = MagicMock()
         technique_instance.check.return_value = [match]
 
-        technique_cls = MagicMock(return_value=technique_instance)
-
         resolved = _make_resolved(user_arn)
 
-        with patch("sxaiam.graph.builder.ALL_TECHNIQUES", [technique_cls]):
+        with patch(
+            "sxaiam.findings.registry.TechniqueRegistry.all",
+            return_value=[technique_instance],
+        ):
             G = AttackGraph().build(snap, [resolved])
 
         return G
@@ -358,9 +359,10 @@ class TestAttackGraphEdges:
 
         technique_instance = MagicMock()
         technique_instance.check.return_value = None
-        technique_cls = MagicMock(return_value=technique_instance)
-
-        with patch("sxaiam.graph.builder.ALL_TECHNIQUES", [technique_cls]):
+        with patch(
+            "sxaiam.findings.registry.TechniqueRegistry.all",
+            return_value=[technique_instance],
+        ):
             G = AttackGraph().build(snap, [resolved])
 
         assert not G.has_edge(user_arn, "sxaiam::admin")
@@ -389,12 +391,17 @@ class TestAttackGraphEdges:
             m.target_arn     = None
             return m
 
-        t1 = MagicMock(return_value=MagicMock(check=MagicMock(
-            return_value=[_make_match("CreatePolicyVersion")])))
-        t2 = MagicMock(return_value=MagicMock(check=MagicMock(
-            return_value=[_make_match("AttachUserPolicy")])))
+        t1 = MagicMock(check=MagicMock(
+            return_value=[_make_match("CreatePolicyVersion")]
+        ))
+        t2 = MagicMock(check=MagicMock(
+            return_value=[_make_match("AttachUserPolicy")]
+        ))
 
-        with patch("sxaiam.graph.builder.ALL_TECHNIQUES", [t1, t2]):
+        with patch(
+            "sxaiam.findings.registry.TechniqueRegistry.all",
+            return_value=[t1, t2],
+        ):
             G = AttackGraph().build(snap, [resolved])
 
         # networkx sobreescribe aristas paralelas — la última gana
@@ -416,7 +423,7 @@ class TestTrustPolicyEdges:
         role = _make_role(role_arn, "admin-role", trust_principals=[user_arn])
         snap = _make_snapshot(users=[user], roles=[role])
 
-        with patch("sxaiam.graph.builder.ALL_TECHNIQUES", []):
+        with patch("sxaiam.findings.registry.TechniqueRegistry.all", return_value=[]):
             G = AttackGraph().build(snap, [])
 
         assert G.has_edge(user_arn, role_arn)
@@ -429,7 +436,7 @@ class TestTrustPolicyEdges:
         role = _make_role(role_arn, "admin-role", trust_principals=[user_arn])
         snap = _make_snapshot(users=[user], roles=[role])
 
-        with patch("sxaiam.graph.builder.ALL_TECHNIQUES", []):
+        with patch("sxaiam.findings.registry.TechniqueRegistry.all", return_value=[]):
             G = AttackGraph().build(snap, [])
 
         edge = G.edges[user_arn, role_arn]
@@ -440,7 +447,7 @@ class TestTrustPolicyEdges:
         role = _make_role(role_arn, "self-assuming", trust_principals=[role_arn])
         snap = _make_snapshot(roles=[role])
 
-        with patch("sxaiam.graph.builder.ALL_TECHNIQUES", []):
+        with patch("sxaiam.findings.registry.TechniqueRegistry.all", return_value=[]):
             G = AttackGraph().build(snap, [])
 
         assert not G.has_edge(role_arn, role_arn)
@@ -453,7 +460,7 @@ class TestTrustPolicyEdges:
         role = _make_role(role_arn, "target", trust_principals=[unknown_arn])
         snap = _make_snapshot(roles=[role])
 
-        with patch("sxaiam.graph.builder.ALL_TECHNIQUES", []):
+        with patch("sxaiam.findings.registry.TechniqueRegistry.all", return_value=[]):
             G = AttackGraph().build(snap, [])
 
         assert not G.has_edge(unknown_arn, role_arn)

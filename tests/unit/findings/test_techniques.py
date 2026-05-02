@@ -14,9 +14,9 @@ from sxaiam.ingestion.models import (
     IAMUser,
     PolicyDocument,
 )
+from sxaiam.findings.registry import TechniqueRegistry
 from sxaiam.findings.technique_base import Severity
 from sxaiam.findings.techniques import (
-    ALL_TECHNIQUES,
     AssumeRoleChainTechnique,
     AttachPolicyTechnique,
     CreateAccessKeyTechnique,
@@ -804,24 +804,22 @@ class TestAddUserToGroup:
 
 
 # ---------------------------------------------------------------------------
-# ALL_TECHNIQUES registry
+# Technique registry
 # ---------------------------------------------------------------------------
 
 class TestAllTechniques:
 
     def test_registry_has_nine_techniques(self) -> None:
-        assert len(ALL_TECHNIQUES) == 9
+        assert len(TechniqueRegistry.all()) == 9
 
     def test_all_techniques_have_unique_ids(self) -> None:
-        ids = [t().technique_id for t in ALL_TECHNIQUES]
+        ids = [technique.technique_id for technique in TechniqueRegistry.all()]
         assert len(ids) == len(set(ids))
 
     def test_all_techniques_have_required_actions(self) -> None:
-        for technique_cls in ALL_TECHNIQUES:
-            technique = technique_cls()
+        for technique in TechniqueRegistry.all():
             assert len(technique.required_actions) > 0
 
     def test_all_techniques_have_description(self) -> None:
-        for technique_cls in ALL_TECHNIQUES:
-            technique = technique_cls()
+        for technique in TechniqueRegistry.all():
             assert len(technique.description) > 20
