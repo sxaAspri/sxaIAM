@@ -8,7 +8,7 @@
 [![PyPI](https://img.shields.io/pypi/v/sxaiam)](https://pypi.org/project/sxaiam/)
 [![Python](https://img.shields.io/pypi/pyversions/sxaiam)](https://pypi.org/project/sxaiam/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Tests](https://img.shields.io/badge/tests-25%20passed-brightgreen)](https://github.com/sxaAspri/sxaIAM/actions)
+[![Tests](https://img.shields.io/badge/tests-222%20collected-brightgreen)](https://github.com/sxaAspri/sxaIAM/actions)
 [![Docs](https://img.shields.io/badge/docs-mkdocs-blue)](https://sxaAspri.github.io/sxaIAM/)
 
 ---
@@ -32,7 +32,7 @@ sxaiam answers:
 - **Why? Which permissions justify each step?**
 - **Which techniques were used?**
 
-Every finding is backed by explicit IAM permission evidence — no black box, no guessing.
+Every finding is backed by explicit IAM permission evidence - no black box, no guessing.
 
 ---
 
@@ -41,45 +41,46 @@ Every finding is backed by explicit IAM permission evidence — no black box, no
 ```bash
 $ sxaiam scan --profile staging
 
-sxaiam — IAM Attack Path Analysis
+sxaiam - IAM Attack Path Analysis
   profile : staging
   output  : findings.json (json)
   cutoff  : 5 hops
 
 1/4 Collecting IAM data from AWS...
-  ✓ 12 users, 10 roles, 4 groups — account 123456789012
+  OK 12 users, 10 roles, 4 groups - account 123456789012
 2/4 Resolving effective permissions...
-  ✓ 22 identities resolved
+  OK 22 identities resolved
 3/4 Building attack graph and finding paths...
-  ✓ 27 nodes, 10 edges — 9 escalation path(s) found
+  OK 27 nodes, 10 edges - 9 escalation path(s) found
 4/4 Exporting results (json)...
-  ✓ Saved to findings.json
+  OK Saved to findings.json
 
 Escalation Paths Found:
-  [CRITICAL] low-priv-user      → create-policy-version
-  [CRITICAL] readonly-user      → attach-policy
-  [HIGH]     developer-user     → passrole-lambda
-  [HIGH]     contractor-user    → add-user-to-group
+  [CRITICAL] low-priv-user      -> create-policy-version
+  [CRITICAL] readonly-user      -> attach-policy
+  [HIGH]     developer-user     -> passrole-lambda
+  [HIGH]     contractor-user    -> add-user-to-group
 ```
 
 ## How it works
 
-```
+```text
 AWS account
-    │
-    ▼  boto3 — read-only, agentless
-    │
-Ingestion      →  get_account_authorization_details
-    │
-Policy resolver  →  effective permissions per identity
-    │
-Graph engine   →  networkx DiGraph (nodes: identities, edges: permissions)
-    │
-Path finder    →  BFS from any identity to admin nodes
-    │
-    ▼
-JSON · Markdown · GraphML
+    |
+    v  boto3 - read-only, agentless
+    |
+Ingestion        -> get_account_authorization_details
+    |
+Policy resolver  -> effective permissions per identity
+    |
+Graph engine     -> networkx DiGraph (nodes: identities, edges: permissions)
+    |
+Path finder      -> BFS from any identity to admin nodes
+    |
+    v
+JSON / Markdown / GraphML
 ```
+
 ---
 
 ## Install
@@ -109,9 +110,14 @@ sxaiam scan --profile my-profile --format markdown --output report.md
 sxaiam scan --profile my-profile --format graphml --output graph.graphml
 ```
 
+**Generate a report from a previous scan:**
+```bash
+sxaiam report findings.json --format markdown --output report.md
+```
+
 **Compare against AWS Security Hub:**
 ```bash
-sxaiam compare findings.json --region us-east-1
+sxaiam compare findings.json --findings sh_findings.json --output gap.md
 ```
 
 **Use as a Python library:**
@@ -161,19 +167,19 @@ for path in paths:
 
 | Feature | sxaiam | PMapper | Cloudsplaining | Ermetic |
 |---|---|---|---|---|
-| Attack path chaining | ✅ | ✅ (basic) | ❌ | ✅ |
-| Full evidence per finding | ✅ | ❌ | ❌ | ❌ |
-| Offensive perspective | ✅ | partial | ❌ | ❌ |
-| Security Hub comparison | ✅ | ❌ | ❌ | ❌ |
-| Open source | ✅ | ✅ | ✅ | ❌ |
-| Free | ✅ | ✅ | ✅ | ❌ |
-| Active maintenance | ✅ | ❌ | partial | N/A |
+| Attack path chaining | Yes | Yes (basic) | No | Yes |
+| Full evidence per finding | Yes | No | No | No |
+| Offensive perspective | Yes | Partial | No | No |
+| Security Hub comparison | Yes | No | No | No |
+| Open source | Yes | Yes | Yes | No |
+| Free | Yes | Yes | Yes | No |
+| Active maintenance | Yes | No | Partial | N/A |
 
 ---
 
 ## IAM permissions required
 
-sxaiam is **read-only** — it never modifies your account.
+sxaiam is **read-only** - it never modifies your account.
 
 ```json
 {
@@ -195,11 +201,12 @@ sxaiam is **read-only** — it never modifies your account.
   ]
 }
 ```
+
 ---
 
 ## Project structure
 
-```
+```text
 sxaiam/
   sxaiam/
     cli.py              # CLI entry point (Typer)
@@ -210,10 +217,11 @@ sxaiam/
     output/             # JSON / Markdown / GraphML exporters
   tests/
     unit/               # moto-based unit tests
-    integration/        # against the Terraform test environment
+    integration/        # end-to-end pipeline tests
   terraform/            # deliberately vulnerable IAM sandbox
   docs/                 # MkDocs documentation
 ```
+
 ---
 
 ## Development setup
@@ -243,18 +251,18 @@ Full documentation available at **[sxaAspri.github.io/sxaIAM](https://sxaAspri.g
 
 ## Contributing
 
-Contributions are welcome — especially new escalation techniques.
+Contributions are welcome - especially new escalation techniques.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for architecture principles and the PR process.
 
 ---
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT - see [LICENSE](LICENSE).
 
 ---
 
 ## References
 
-- [Rhino Security Labs — AWS IAM Privilege Escalation Methods](https://rhinosecuritylabs.com/aws/aws-privilege-escalation-methods-mitigation/)
+- [Rhino Security Labs - AWS IAM Privilege Escalation Methods](https://rhinosecuritylabs.com/aws/aws-privilege-escalation-methods-mitigation/)
 - [AWS IAM documentation](https://docs.aws.amazon.com/IAM/latest/UserGuide/)

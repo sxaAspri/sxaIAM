@@ -1,5 +1,5 @@
 """
-sxaiam CLI — entry point.
+sxaiam CLI - entry point.
 
 Commands:
   sxaiam scan     Scan an AWS account and build the IAM attack graph
@@ -19,7 +19,7 @@ from rich.table import Table
 
 app = typer.Typer(
     name="sxaiam",
-    help="AWS IAM attack path analysis — find privilege escalation chains.",
+    help="AWS IAM attack path analysis - find privilege escalation chains.",
     add_completion=False,
 )
 console = Console()
@@ -37,7 +37,7 @@ def scan(
     ),
     account_id: str = typer.Option(
         None, "--account-id",
-        help="Target AWS account ID (optional — auto-detected if omitted)",
+        help="Target AWS account ID (optional - auto-detected if omitted)",
     ),
     output: str = typer.Option(
         "report.json", "--output", "-o",
@@ -54,63 +54,63 @@ def scan(
 ) -> None:
     """Scan an AWS account and find IAM privilege escalation paths."""
 
-    # ── Header ──────────────────────────────────────────────────────────
+    # Header
     console.print()
-    console.print("[bold yellow]sxaiam[/] — IAM Attack Path Analysis")
+    console.print("[bold yellow]sxaiam[/] - IAM Attack Path Analysis")
     console.print(f"  profile : [cyan]{profile or 'default'}[/]")
     console.print(f"  output  : [cyan]{output}[/] ([dim]{format}[/])")
     console.print(f"  cutoff  : [dim]{cutoff} hops[/]")
     console.print()
 
-    # ── Step 1: Ingestion ────────────────────────────────────────────────
+    # Step 1: Ingestion
     console.print("[bold]1/4[/] Collecting IAM data from AWS...")
     try:
         from sxaiam.ingestion.client import IngestionClient
         client = IngestionClient.from_profile(profile) if profile else IngestionClient()
         snapshot = client.collect()
     except Exception as exc:
-        console.print(f"[red]✗ Ingestion failed:[/] {exc}")
+        console.print(f"[red]X Ingestion failed:[/] {exc}")
         raise typer.Exit(code=1)
 
     detected_account = account_id or snapshot.account_id or "unknown"
     console.print(
-        f"  [green]✓[/] {len(snapshot.users)} users, "
+        f"  [green]OK[/] {len(snapshot.users)} users, "
         f"{len(snapshot.roles)} roles, "
-        f"{len(snapshot.groups)} groups — "
+        f"{len(snapshot.groups)} groups - "
         f"account [cyan]{detected_account}[/]"
     )
 
-    # ── Step 2: Policy Resolution ────────────────────────────────────────
+    # Step 2: Policy Resolution
     console.print("[bold]2/4[/] Resolving effective permissions...")
     try:
         from sxaiam.resolver.engine import PolicyResolver
         resolved = PolicyResolver(snapshot).resolve_all()
     except Exception as exc:
-        console.print(f"[red]✗ Resolver failed:[/] {exc}")
+        console.print(f"[red]X Resolver failed:[/] {exc}")
         raise typer.Exit(code=1)
 
-    console.print(f"  [green]✓[/] {len(resolved)} identities resolved")
+    console.print(f"  [green]OK[/] {len(resolved)} identities resolved")
 
-    # ── Step 3: Graph + BFS ──────────────────────────────────────────────
+    # Step 3: Graph + BFS
     console.print("[bold]3/4[/] Building attack graph and finding paths...")
     try:
         from sxaiam.graph.builder import AttackGraph
         from sxaiam.graph.pathfinder import PathFinder
 
-        G      = AttackGraph().build(snapshot, list(resolved.values()))
+        G = AttackGraph().build(snapshot, list(resolved.values()))
         finder = PathFinder(G, cutoff=cutoff)
-        paths  = finder.find_all_paths()
+        paths = finder.find_all_paths()
     except Exception as exc:
-        console.print(f"[red]✗ Graph engine failed:[/] {exc}")
+        console.print(f"[red]X Graph engine failed:[/] {exc}")
         raise typer.Exit(code=1)
 
     console.print(
-        f"  [green]✓[/] {G.number_of_nodes()} nodes, "
-        f"{G.number_of_edges()} edges — "
+        f"  [green]OK[/] {G.number_of_nodes()} nodes, "
+        f"{G.number_of_edges()} edges - "
         f"[bold]{len(paths)} escalation path(s) found[/]"
     )
 
-    # ── Step 4: Export ───────────────────────────────────────────────────
+    # Step 4: Export
     console.print(f"[bold]4/4[/] Exporting results ({format})...")
     output_path = Path(output)
 
@@ -129,16 +129,16 @@ def scan(
             GraphMLExporter().export(G, output_path)
 
         else:
-            console.print(f"[red]✗ Unknown format:[/] {format}. Use json | markdown | graphml")
+            console.print(f"[red]X Unknown format:[/] {format}. Use json | markdown | graphml")
             raise typer.Exit(code=1)
 
     except Exception as exc:
-        console.print(f"[red]✗ Export failed:[/] {exc}")
+        console.print(f"[red]X Export failed:[/] {exc}")
         raise typer.Exit(code=1)
 
-    console.print(f"  [green]✓[/] Saved to [cyan]{output_path}[/]")
+    console.print(f"  [green]OK[/] Saved to [cyan]{output_path}[/]")
 
-    # ── Summary table ────────────────────────────────────────────────────
+    # Summary table
     _print_summary_table(paths)
 
 
@@ -161,30 +161,30 @@ def report(
     """Generate a human-readable report from a scan result JSON."""
 
     console.print()
-    console.print(f"[bold yellow]sxaiam[/] — generating report from [cyan]{input}[/]")
+    console.print(f"[bold yellow]sxaiam[/] - generating report from [cyan]{input}[/]")
 
     input_path = Path(input)
     if not input_path.exists():
-        console.print(f"[red]✗ File not found:[/] {input}")
+        console.print(f"[red]X File not found:[/] {input}")
         raise typer.Exit(code=1)
 
-    # Cargar paths desde el JSON de scan
+    # Load paths from scan JSON
     try:
         paths = _load_paths_from_json(input_path)
     except Exception as exc:
-        console.print(f"[red]✗ Failed to load scan file:[/] {exc}")
+        console.print(f"[red]X Failed to load scan file:[/] {exc}")
         raise typer.Exit(code=1)
 
-    console.print(f"  [green]✓[/] Loaded {len(paths)} path(s)")
+    console.print(f"  [green]OK[/] Loaded {len(paths)} path(s)")
 
-    # Generar output
+    # Generate output
     fmt = format.lower()
     if fmt == "markdown":
         from sxaiam.output.markdown_exporter import MarkdownExporter
         exporter = MarkdownExporter()
         if output:
             exporter.export(paths, Path(output))
-            console.print(f"  [green]✓[/] Report saved to [cyan]{output}[/]")
+            console.print(f"  [green]OK[/] Report saved to [cyan]{output}[/]")
         else:
             console.print(exporter.to_markdown(paths))
 
@@ -193,12 +193,12 @@ def report(
         exporter = JSONExporter()
         if output:
             exporter.export(paths, Path(output))
-            console.print(f"  [green]✓[/] Report saved to [cyan]{output}[/]")
+            console.print(f"  [green]OK[/] Report saved to [cyan]{output}[/]")
         else:
             console.print(exporter.to_json(paths))
 
     else:
-        console.print(f"[red]✗ Unknown format:[/] {format}")
+        console.print(f"[red]X Unknown format:[/] {format}")
         raise typer.Exit(code=1)
 
 
@@ -223,27 +223,27 @@ def compare(
     """Compare sxaiam findings against AWS Security Hub on the same account."""
 
     console.print()
-    console.print("[bold yellow]sxaiam[/] — Detection Gap Analysis")
+    console.print("[bold yellow]sxaiam[/] - Detection Gap Analysis")
     console.print(f"  sxaiam scan : [cyan]{scan_file}[/]")
     console.print(f"  SH findings : [cyan]{findings_file}[/]")
     console.print()
 
-    # Cargar paths de sxaiam
+    # Load sxaiam paths
     scan_path = Path(scan_file)
     if not scan_path.exists():
-        console.print(f"[red]✗ Scan file not found:[/] {scan_file}")
+        console.print(f"[red]X Scan file not found:[/] {scan_file}")
         raise typer.Exit(code=1)
 
     try:
         paths = _load_paths_from_json(scan_path)
     except Exception as exc:
-        console.print(f"[red]✗ Failed to load scan file:[/] {exc}")
+        console.print(f"[red]X Failed to load scan file:[/] {exc}")
         raise typer.Exit(code=1)
 
-    # Cargar findings de Security Hub
+    # Load Security Hub findings
     sh_path = Path(findings_file)
     if not sh_path.exists():
-        console.print(f"[red]✗ Security Hub findings file not found:[/] {findings_file}")
+        console.print(f"[red]X Security Hub findings file not found:[/] {findings_file}")
         raise typer.Exit(code=1)
 
     from sxaiam.findings.comparator import SecurityHubComparator
@@ -251,25 +251,25 @@ def compare(
     try:
         comparator.load_findings_from_file(sh_path)
     except Exception as exc:
-        console.print(f"[red]✗ Failed to load Security Hub findings:[/] {exc}")
+        console.print(f"[red]X Failed to load Security Hub findings:[/] {exc}")
         raise typer.Exit(code=1)
 
     console.print(
-        f"  [green]✓[/] {len(paths)} sxaiam path(s), "
+        f"  [green]OK[/] {len(paths)} sxaiam path(s), "
         f"{len(comparator._findings)} Security Hub finding(s) loaded"
     )
 
-    # Comparar
+    # Compare
     report_obj = comparator.compare(paths)
 
-    # Imprimir scoring ejecutivo
+    # Print executive scoring
     _print_executive_scoring(report_obj)
 
     # Output
     md = report_obj.to_markdown()
     if output:
         Path(output).write_text(md, encoding="utf-8")
-        console.print(f"\n  [green]✓[/] Gap report saved to [cyan]{output}[/]")
+        console.print(f"\n  [green]OK[/] Gap report saved to [cyan]{output}[/]")
     else:
         console.print()
         console.print(md)
@@ -301,13 +301,13 @@ def main(
 
 
 # ---------------------------------------------------------------------------
-# Helpers internos
+# Internal helpers
 # ---------------------------------------------------------------------------
 
 def _print_summary_table(paths: list) -> None:
-    """Imprime tabla resumen de rutas encontradas en la terminal."""
+    """Print a summary table of detected escalation paths."""
     if not paths:
-        console.print("\n[green]✓ No escalation paths found.[/]")
+        console.print("\n[green]OK No escalation paths found.[/]")
         return
 
     console.print()
@@ -317,19 +317,19 @@ def _print_summary_table(paths: list) -> None:
         show_lines=True,
     )
     table.add_column("Severity", style="bold", width=10)
-    table.add_column("Origin",   width=30)
-    table.add_column("Steps",    width=6, justify="center")
+    table.add_column("Origin", width=30)
+    table.add_column("Steps", width=6, justify="center")
     table.add_column("Techniques", width=35)
 
     severity_colors = {
         "CRITICAL": "red",
-        "HIGH":     "orange3",
-        "MEDIUM":   "yellow",
-        "LOW":      "green",
+        "HIGH": "orange3",
+        "MEDIUM": "yellow",
+        "LOW": "green",
     }
 
     for path in paths:
-        sev   = path.severity.value
+        sev = path.severity.value
         color = severity_colors.get(sev, "white")
         table.add_row(
             f"[{color}]{sev}[/]",
@@ -343,7 +343,7 @@ def _print_summary_table(paths: list) -> None:
 
 
 def _print_executive_scoring(report) -> None:
-    """Imprime scoring ejecutivo del gap de detección."""
+    """Print executive scoring for the detection gap report."""
     console.print()
 
     table = Table(
@@ -352,23 +352,23 @@ def _print_executive_scoring(report) -> None:
         show_header=False,
     )
     table.add_column("Metric", style="bold", width=35)
-    table.add_column("Value",  width=20)
+    table.add_column("Value", width=20)
 
-    # Calcular critical missed
+    # Count critical missed paths
     critical_missed = sum(
         1 for c in report.missed
         if c.path.severity.value == "CRITICAL"
     )
 
     gap_color = (
-    "red" if report.gap_percentage > 50
-    else "yellow" if report.gap_percentage > 20
-    else "green"
-)
+        "red" if report.gap_percentage > 50
+        else "yellow" if report.gap_percentage > 20
+        else "green"
+    )
 
-    table.add_row("sxaiam paths found",         str(report.total_sxaiam_paths))
+    table.add_row("sxaiam paths found", str(report.total_sxaiam_paths))
     table.add_row("Security Hub findings loaded", str(report.total_sh_findings))
-    table.add_row("Detection Coverage",          f"{report.coverage_percentage}%")
+    table.add_row("Detection Coverage", f"{report.coverage_percentage}%")
     table.add_row(
         "Escalation Blind Spots",
         f"[{gap_color}]{report.gap_percentage}%[/]"
@@ -377,26 +377,26 @@ def _print_executive_scoring(report) -> None:
         "Critical Paths Not Detected",
         f"[red]{critical_missed}[/]" if critical_missed > 0 else "0"
     )
-    table.add_row("Paths Not Correlated",        str(len(report.missed)))
-    table.add_row("Paths Partially Correlated",  str(len(report.partial)))
+    table.add_row("Paths Not Correlated", str(len(report.missed)))
+    table.add_row("Paths Partially Correlated", str(len(report.partial)))
 
     console.print(table)
 
 
 def _load_paths_from_json(path: Path) -> list:
     """
-    Carga EscalationPaths desde un JSON de scan de sxaiam.
+    Load EscalationPath objects from a sxaiam scan JSON file.
 
-    Nota: el JSON de scan guarda los paths serializados como dicts.
-    Para el comando report y compare los reconstruimos como objetos
-    mínimos que los exporters y el comparador pueden consumir.
+    The scan JSON stores paths as serialized dicts. For the `report`
+    and `compare` commands we rebuild minimal compatible objects that
+    the exporters and comparator can consume.
     """
     data = json.loads(path.read_text(encoding="utf-8"))
 
-    # El JSON tiene {"metadata": {...}, "paths": [...]}
+    # Expected JSON shape: {"metadata": {...}, "paths": [...]}
     raw_paths = data.get("paths", [])
 
-    # Reconstruir como objetos compatibles con los exporters
+    # Rebuild as objects compatible with exporters and comparator
     from sxaiam.findings.escalation_path import EscalationPath, PathStep
     from sxaiam.findings.technique_base import Severity
 
