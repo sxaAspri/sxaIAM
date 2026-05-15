@@ -639,6 +639,50 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#putuserpolicy-inline-escalation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PutUserPolicy inline escalation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#putrolepolicy-inline-escalation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PutRolePolicy inline escalation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#putgrouppolicy-inline-escalation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PutGroupPolicy inline escalation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#attachgrouppolicy-escalation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AttachGroupPolicy escalation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#passrole-lambda-execution" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -709,6 +753,17 @@
     <span class="md-ellipsis">
       
         AddUserToGroup self-escalation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#updateassumerolepolicy-trust-hijack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UpdateAssumeRolePolicy trust hijack
       
     </span>
   </a>
@@ -874,6 +929,50 @@
 </li>
         
           <li class="md-nav__item">
+  <a href="#putuserpolicy-inline-escalation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PutUserPolicy inline escalation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#putrolepolicy-inline-escalation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PutRolePolicy inline escalation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#putgrouppolicy-inline-escalation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        PutGroupPolicy inline escalation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#attachgrouppolicy-escalation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AttachGroupPolicy escalation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
   <a href="#passrole-lambda-execution" class="md-nav__link">
     <span class="md-ellipsis">
       
@@ -950,6 +1049,17 @@
   
 </li>
         
+          <li class="md-nav__item">
+  <a href="#updateassumerolepolicy-trust-hijack" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        UpdateAssumeRolePolicy trust hijack
+      
+    </span>
+  </a>
+  
+</li>
+        
       </ul>
     </nav>
   
@@ -987,7 +1097,7 @@
 
 
 <h1 id="escalation-techniques">Escalation Techniques</h1>
-<p>sxaiam currently models 9 IAM privilege escalation techniques.
+<p>sxaiam currently models 14 IAM privilege escalation techniques.
 Each technique is a self-contained class that knows what permissions it needs,
 how to find viable targets, and what evidence to attach to each finding.</p>
 <h2 id="technique-registry">Technique registry</h2>
@@ -1012,6 +1122,30 @@ how to find viable targets, and what evidence to attach to each finding.</p>
 <td>AttachUserPolicy / AttachRolePolicy</td>
 <td>CRITICAL</td>
 <td><code>iam:AttachUserPolicy</code>, <code>iam:AttachRolePolicy</code></td>
+</tr>
+<tr>
+<td><code>put-user-policy</code></td>
+<td>PutUserPolicy inline escalation</td>
+<td>CRITICAL</td>
+<td><code>iam:PutUserPolicy</code></td>
+</tr>
+<tr>
+<td><code>put-role-policy</code></td>
+<td>PutRolePolicy inline escalation</td>
+<td>CRITICAL</td>
+<td><code>iam:PutRolePolicy</code>, <code>sts:AssumeRole</code></td>
+</tr>
+<tr>
+<td><code>put-group-policy</code></td>
+<td>PutGroupPolicy inline escalation</td>
+<td>CRITICAL</td>
+<td><code>iam:PutGroupPolicy</code></td>
+</tr>
+<tr>
+<td><code>attach-group-policy</code></td>
+<td>AttachGroupPolicy escalation</td>
+<td>CRITICAL</td>
+<td><code>iam:AttachGroupPolicy</code></td>
 </tr>
 <tr>
 <td><code>passrole-lambda</code></td>
@@ -1055,6 +1189,12 @@ how to find viable targets, and what evidence to attach to each finding.</p>
 <td>HIGH</td>
 <td><code>iam:AddUserToGroup</code></td>
 </tr>
+<tr>
+<td><code>update-assume-role-policy</code></td>
+<td>UpdateAssumeRolePolicy trust hijack</td>
+<td>HIGH</td>
+<td><code>iam:UpdateAssumeRolePolicy</code>, <code>sts:AssumeRole</code></td>
+</tr>
 </tbody>
 </table>
 <hr />
@@ -1065,17 +1205,64 @@ how to find viable targets, and what evidence to attach to each finding.</p>
 to itself. By creating a new policy version with <code>Allow *:*</code> and setting it as default,
 the identity grants itself full administrator access.</p>
 <p><strong>Attack steps:</strong></p>
-<p>iam:CreatePolicyVersion on target policy with {"Effect":"Allow","Action":"","Resource":""}
-iam:SetDefaultPolicyVersion to activate the new version
-Identity now has AdministratorAccess</p>
+<ol>
+<li><code>iam:CreatePolicyVersion</code> on target policy with <code>{"Effect":"Allow","Action":"*","Resource":"*"}</code></li>
+<li><code>iam:SetDefaultPolicyVersion</code> to activate the new version</li>
+<li>Identity now has AdministratorAccess</li>
+</ol>
 <hr />
 <h3 id="attachuserpolicy-attachrolepolicy">AttachUserPolicy / AttachRolePolicy</h3>
 <p><strong>Severity:</strong> CRITICAL</p>
 <p>The identity has <code>iam:AttachUserPolicy</code> or <code>iam:AttachRolePolicy</code> with a resource scope
 that includes itself. It can attach <code>AdministratorAccess</code> directly in one API call.</p>
 <p><strong>Attack steps:</strong></p>
-<p>iam:AttachUserPolicy with PolicyArn=arn:aws:iam::aws:policy/AdministratorAccess
-Identity now has AdministratorAccess</p>
+<ol>
+<li><code>iam:AttachUserPolicy</code> with <code>PolicyArn=arn:aws:iam::aws:policy/AdministratorAccess</code></li>
+<li>Identity now has AdministratorAccess</li>
+</ol>
+<hr />
+<h3 id="putuserpolicy-inline-escalation">PutUserPolicy inline escalation</h3>
+<p><strong>Severity:</strong> CRITICAL</p>
+<p>The identity has <code>iam:PutUserPolicy</code> on itself. By creating an inline policy with
+<code>Allow *:*</code> directly on its own user, it grants itself full administrator access
+in a single API call.</p>
+<p><strong>Attack steps:</strong></p>
+<ol>
+<li><code>iam:PutUserPolicy</code> with <code>UserName=&lt;self&gt;</code> and <code>{"Effect":"Allow","Action":"*","Resource":"*"}</code></li>
+<li>Identity now has full administrator access via inline policy</li>
+</ol>
+<hr />
+<h3 id="putrolepolicy-inline-escalation">PutRolePolicy inline escalation</h3>
+<p><strong>Severity:</strong> CRITICAL</p>
+<p>The identity has <code>iam:PutRolePolicy</code> on a role it can assume. By injecting an inline
+policy with <code>Allow *:*</code> into that role and then assuming it, the attacker gains full
+administrator access.</p>
+<p><strong>Attack steps:</strong></p>
+<ol>
+<li><code>iam:PutRolePolicy</code> on target role with <code>{"Effect":"Allow","Action":"*","Resource":"*"}</code></li>
+<li><code>sts:AssumeRole</code> with <code>RoleArn=&lt;target_role_arn&gt;</code></li>
+<li>Operate as the target role with full administrator access</li>
+</ol>
+<hr />
+<h3 id="putgrouppolicy-inline-escalation">PutGroupPolicy inline escalation</h3>
+<p><strong>Severity:</strong> CRITICAL</p>
+<p>The identity has <code>iam:PutGroupPolicy</code> on a group. By injecting an inline policy with
+<code>Allow *:*</code> into that group, all members immediately inherit full administrator access.</p>
+<p><strong>Attack steps:</strong></p>
+<ol>
+<li><code>iam:PutGroupPolicy</code> on target group with <code>{"Effect":"Allow","Action":"*","Resource":"*"}</code></li>
+<li>All members of the group immediately inherit full administrator access</li>
+</ol>
+<hr />
+<h3 id="attachgrouppolicy-escalation">AttachGroupPolicy escalation</h3>
+<p><strong>Severity:</strong> CRITICAL</p>
+<p>The identity has <code>iam:AttachGroupPolicy</code> on a group. By attaching <code>AdministratorAccess</code>
+to that group, all its members immediately inherit full administrator access.</p>
+<p><strong>Attack steps:</strong></p>
+<ol>
+<li><code>iam:AttachGroupPolicy</code> with <code>GroupName=&lt;target_group&gt;</code> and <code>PolicyArn=arn:aws:iam::aws:policy/AdministratorAccess</code></li>
+<li>All members of the group immediately inherit AdministratorAccess</li>
+</ol>
 <hr />
 <h3 id="passrole-lambda-execution">PassRole + Lambda execution</h3>
 <p><strong>Severity:</strong> HIGH</p>
@@ -1083,16 +1270,20 @@ Identity now has AdministratorAccess</p>
 By creating a Lambda that runs as the privileged role and invoking it, the attacker
 executes arbitrary code with those permissions.</p>
 <p><strong>Attack steps:</strong></p>
-<p>lambda:CreateFunction with Role=<privileged_role_arn>
-lambda:InvokeFunction to execute arbitrary code as the privileged role</p>
+<ol>
+<li><code>lambda:CreateFunction</code> with <code>Role=&lt;privileged_role_arn&gt;</code></li>
+<li><code>lambda:InvokeFunction</code> to execute arbitrary code as the privileged role</li>
+</ol>
 <hr />
 <h3 id="assumerole-chaining">AssumeRole chaining</h3>
 <p><strong>Severity:</strong> HIGH</p>
 <p>The identity has <code>sts:AssumeRole</code> on a more privileged role, and that role's trust
 policy allows this identity to assume it. Direct pivot in a single API call.</p>
 <p><strong>Attack steps:</strong></p>
-<p>sts:AssumeRole with RoleArn=<target_role_arn>
-Receive temporary credentials for the target role</p>
+<ol>
+<li><code>sts:AssumeRole</code> with <code>RoleArn=&lt;target_role_arn&gt;</code></li>
+<li>Receive temporary credentials for the target role</li>
+</ol>
 <hr />
 <h3 id="createaccesskey-credential-takeover">CreateAccessKey credential takeover</h3>
 <p><strong>Severity:</strong> HIGH</p>
@@ -1100,9 +1291,11 @@ Receive temporary credentials for the target role</p>
 new access key for that user, the attacker can authenticate as them and inherit
 all their permissions.</p>
 <p><strong>Attack steps:</strong></p>
-<p>iam:CreateAccessKey with UserName=<target_user>
-Configure AWS CLI with the returned credentials
-Operate as the target user</p>
+<ol>
+<li><code>iam:CreateAccessKey</code> with <code>UserName=&lt;target_user&gt;</code></li>
+<li>Configure AWS CLI with the returned credentials</li>
+<li>Operate as the target user</li>
+</ol>
 <hr />
 <h3 id="createloginprofile-console-takeover">CreateLoginProfile console takeover</h3>
 <p><strong>Severity:</strong> HIGH</p>
@@ -1110,16 +1303,20 @@ Operate as the target user</p>
 console password yet. By setting a password, the attacker can log into the AWS
 console as that user.</p>
 <p><strong>Attack steps:</strong></p>
-<p>iam:CreateLoginProfile with UserName=<target_user> and a chosen password
-Log into AWS console as the target user</p>
+<ol>
+<li><code>iam:CreateLoginProfile</code> with <code>UserName=&lt;target_user&gt;</code> and a chosen password</li>
+<li>Log into AWS console as the target user</li>
+</ol>
 <hr />
 <h3 id="updateloginprofile-password-reset">UpdateLoginProfile password reset</h3>
 <p><strong>Severity:</strong> HIGH</p>
 <p>The identity has <code>iam:UpdateLoginProfile</code> on a more privileged user that already
 has a console password. By resetting it, the attacker can log in as that user.</p>
 <p><strong>Attack steps:</strong></p>
-<p>iam:UpdateLoginProfile with UserName=<target_user> and a new password
-Log into AWS console as the target user</p>
+<ol>
+<li><code>iam:UpdateLoginProfile</code> with <code>UserName=&lt;target_user&gt;</code> and a new password</li>
+<li>Log into AWS console as the target user</li>
+</ol>
 <hr />
 <h3 id="setdefaultpolicyversion-privilege-swap">SetDefaultPolicyVersion privilege swap</h3>
 <p><strong>Severity:</strong> HIGH</p>
@@ -1127,16 +1324,32 @@ Log into AWS console as the target user</p>
 itself. If a non-default version with broader permissions exists, the attacker
 can activate it.</p>
 <p><strong>Attack steps:</strong></p>
-<p>iam:ListPolicyVersions to find non-default versions
-iam:SetDefaultPolicyVersion to activate a version with broader permissions</p>
+<ol>
+<li><code>iam:ListPolicyVersions</code> to find non-default versions</li>
+<li><code>iam:SetDefaultPolicyVersion</code> to activate a version with broader permissions</li>
+</ol>
 <hr />
 <h3 id="addusertogroup-self-escalation">AddUserToGroup self-escalation</h3>
 <p><strong>Severity:</strong> HIGH</p>
 <p>The identity has <code>iam:AddUserToGroup</code> on a privileged group. By adding itself
 to that group, it immediately inherits all the group's permissions.</p>
 <p><strong>Attack steps:</strong></p>
-<p>iam:AddUserToGroup with GroupName=<admin_group> and UserName=<self>
-Identity immediately inherits all group permissions</p>
+<ol>
+<li><code>iam:AddUserToGroup</code> with <code>GroupName=&lt;admin_group&gt;</code> and <code>UserName=&lt;self&gt;</code></li>
+<li>Identity immediately inherits all group permissions</li>
+</ol>
+<hr />
+<h3 id="updateassumerolepolicy-trust-hijack">UpdateAssumeRolePolicy trust hijack</h3>
+<p><strong>Severity:</strong> HIGH</p>
+<p>The identity has <code>iam:UpdateAssumeRolePolicy</code> on a privileged role. By modifying
+the trust policy to allow itself to assume that role, the attacker can then call
+<code>sts:AssumeRole</code> and inherit all of the role's permissions.</p>
+<p><strong>Attack steps:</strong></p>
+<ol>
+<li><code>iam:UpdateAssumeRolePolicy</code> on target role to add self as trusted principal</li>
+<li><code>sts:AssumeRole</code> with <code>RoleArn=&lt;target_role_arn&gt;</code></li>
+<li>Operate as the target role with its full permissions</li>
+</ol>
 <hr />
 <h2 id="adding-a-new-technique">Adding a new technique</h2>
 <p>See <a href="../contributing/">Contributing</a> for step-by-step instructions on how to
