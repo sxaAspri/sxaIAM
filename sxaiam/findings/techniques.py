@@ -892,6 +892,405 @@ class AddUserToGroupTechnique(EscalationTechnique):
 TechniqueRegistry.register(AddUserToGroupTechnique())
 
 
+
+# ---------------------------------------------------------------------------
+# Technique 10 — PutUserPolicy (inline policy self-escalation)
+# ---------------------------------------------------------------------------
+
+class PutUserPolicyTechnique(EscalationTechnique):
+    """
+    The attacker has iam:PutUserPolicy on themselves or on *.
+    They create an inline policy granting Allow *:* on themselves,
+    gaining full administrator access in a single API call.
+
+    Permissions needed:
+      - iam:PutUserPolicy (on self or *)
+    """
+
+    @property
+    def technique_id(self) -> str:
+        return "put-user-policy"
+
+    @property
+    def name(self) -> str:
+        return "PutUserPolicy inline escalation"
+
+    @property
+    def severity(self) -> Severity:
+        return Severity.CRITICAL
+
+    @property
+    def required_actions(self) -> list[str]:
+        return ["iam:PutUserPolicy"]
+
+    @property
+    def description(self) -> str:
+        return (
+            "The identity has iam:PutUserPolicy on itself. By creating an "
+            "inline policy with Allow *:* on its own user, it grants itself "
+            "full administrator access in a single API call."
+        )
+
+    def check(self, identity, snapshot) -> list[TechniqueMatch]:
+        can_put = (
+            identity.can("iam:PutUserPolicy", identity.arn)
+            or identity.can("iam:PutUserPolicy", "*")
+        )
+        if not can_put:
+            return []
+
+        evidence = self._build_evidence(identity, ["iam:PutUserPolicy"])
+        return [TechniqueMatch(
+            technique_id=self.technique_id,
+            technique_name=self.name,
+            severity=self.severity,
+            origin_arn=identity.arn,
+            origin_name=identity.name,
+            target_arn="sxaiam::admin",
+            target_name="AdministratorAccess (inline)",
+            description=self.description,
+            evidence=evidence,
+            attack_steps=[
+                f"1. Call iam:PutUserPolicy with UserName={identity.name} "
+                'and policy document {"Effect":"Allow","Action":"*","Resource":"*"}',
+                f"2. {identity.name} now has full administrator access via inline policy",
+            ],
+        )]
+
+
+TechniqueRegistry.register(PutUserPolicyTechnique())
+
+
+# ---------------------------------------------------------------------------
+# Technique 11 — PutRolePolicy (inline policy on assumable role)
+# ---------------------------------------------------------------------------
+
+class PutRolePolicyTechnique(EscalationTechnique):
+    """
+    The attacker has iam:PutRolePolicy on a role they can assume.
+    They inject an inline policy with Allow *:* into that role,
+    then assume it to gain full administrator access.
+
+    Permissions needed:
+      - iam:PutRolePolicy (on a target role or *)
+      - sts:AssumeRole (on the same role, via trust policy)
+    """
+
+    @property
+    def technique_id(self) -> str:
+        return "put-role-policy"
+
+    @property
+    def name(self) -> str:
+        return "PutRolePolicy inline escalation"
+
+    @property
+    def severity(self) -> Severity:
+        return Severity.CRITICAL
+
+    @property
+    def required_actions(self) -> list[str]:
+        return ["iam:PutRolePolicy", "sts:AssumeRole"]
+
+    @property
+    def description(self) -> str:
+        return (
+            "The identity has iam:PutRolePolicy on a role it can assume. "
+            "By injecting an inline policy with Allow *:* into that role "
+            "and then assuming it, the attacker gains full administrator access."
+        )
+
+    def check(self, identity, snapshot) -> list[TechniqueMatch]:
+        matches = []
+
+        for role in snapshot.roles:
+            if role.arn == identity.arn:
+                continue
+
+            can_put = (
+                identity.can("iam:PutRolePolicy", role.arn)
+                or identity.can("iam:PutRolePolicy", "*")
+            )
+            if not can_put:
+                continue
+
+            can_assume = (
+                identity.can("sts:AssumeRole", role.arn)
+                or identity.can("sts:AssumeRole", "*")
+            )
+            if not can_assume:
+                continue
+
+            evidence = self._build_evidence(
+                identity, ["iam:PutRolePolicy", "sts:AssumeRole"]
+            )
+            matches.append(TechniqueMatch(
+                technique_id=self.technique_id,
+                technique_name=self.name,
+                severity=self.severity,
+                origin_arn=identity.arn,
+                origin_name=identity.name,
+                target_arn="sxaiam::admin",
+                target_name=role.name,
+                description=self.description,
+                evidence=evidence,
+                attack_steps=[
+                    f"1. Call iam:PutRolePolicy on {role.arn} "
+                    'with document {"Effect":"Allow","Action":"*","Resource":"*"}',
+                    f"2. Call sts:AssumeRole with RoleArn={role.arn}",
+                    f"3. Operate as {role.name} with full administrator access",
+                ],
+            ))
+
+        return matches
+
+
+TechniqueRegistry.register(PutRolePolicyTechnique())
+
+# ---------------------------------------------------------------------------
+# Technique 12 — PutGroupPolicy (inline policy on group)
+# ---------------------------------------------------------------------------
+
+class PutGroupPolicyTechnique(EscalationTechnique):
+    """
+    The attacker has iam:PutGroupPolicy on a group that has members.
+    They inject an inline policy with Allow *:* into that group.
+    Any user in the group immediately inherits full administrator access.
+
+    Permissions needed:
+      - iam:PutGroupPolicy (on a target group or *)
+    """
+
+    @property
+    def technique_id(self) -> str:
+        return "put-group-policy"
+
+    @property
+    def name(self) -> str:
+        return "PutGroupPolicy inline escalation"
+
+    @property
+    def severity(self) -> Severity:
+        return Severity.CRITICAL
+
+    @property
+    def required_actions(self) -> list[str]:
+        return ["iam:PutGroupPolicy"]
+
+    @property
+    def description(self) -> str:
+        return (
+            "The identity has iam:PutGroupPolicy on a group. By injecting "
+            "an inline policy with Allow *:* into that group, all members "
+            "immediately inherit full administrator access."
+        )
+
+    def check(self, identity, snapshot) -> list[TechniqueMatch]:
+        matches = []
+
+        for group in snapshot.groups:
+            can_put = (
+                identity.can("iam:PutGroupPolicy", group.arn)
+                or identity.can("iam:PutGroupPolicy", "*")
+            )
+            if not can_put:
+                continue
+
+            if not group.attached_policies and not group.inline_policies:
+                continue
+
+            evidence = self._build_evidence(identity, ["iam:PutGroupPolicy"])
+            matches.append(TechniqueMatch(
+                technique_id=self.technique_id,
+                technique_name=self.name,
+                severity=self.severity,
+                origin_arn=identity.arn,
+                origin_name=identity.name,
+                target_arn="sxaiam::admin",
+                target_name=group.name,
+                description=self.description,
+                evidence=evidence,
+                attack_steps=[
+                    f"1. Call iam:PutGroupPolicy on {group.name} "
+                    'with document {"Effect":"Allow","Action":"*","Resource":"*"}',
+                    f"2. All members of {group.name} immediately inherit "
+                    "full administrator access",
+                ],
+            ))
+
+        return matches
+
+
+TechniqueRegistry.register(PutGroupPolicyTechnique())
+
+# ---------------------------------------------------------------------------
+# Technique 13 — AttachGroupPolicy (attach AdministratorAccess to group)
+# ---------------------------------------------------------------------------
+
+class AttachGroupPolicyTechnique(EscalationTechnique):
+    """
+    The attacker has iam:AttachGroupPolicy on a group that has members.
+    They attach AdministratorAccess directly to that group.
+    All members immediately inherit full administrator access.
+
+    Permissions needed:
+      - iam:AttachGroupPolicy (on a target group or *)
+    """
+
+    @property
+    def technique_id(self) -> str:
+        return "attach-group-policy"
+
+    @property
+    def name(self) -> str:
+        return "AttachGroupPolicy escalation"
+
+    @property
+    def severity(self) -> Severity:
+        return Severity.CRITICAL
+
+    @property
+    def required_actions(self) -> list[str]:
+        return ["iam:AttachGroupPolicy"]
+
+    @property
+    def description(self) -> str:
+        return (
+            "The identity has iam:AttachGroupPolicy on a group. By attaching "
+            "AdministratorAccess to that group, all its members immediately "
+            "inherit full administrator access."
+        )
+
+    def check(self, identity, snapshot) -> list[TechniqueMatch]:
+        admin_policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+        matches = []
+
+        for group in snapshot.groups:
+            can_attach = (
+                identity.can("iam:AttachGroupPolicy", group.arn)
+                or identity.can("iam:AttachGroupPolicy", "*")
+            )
+            if not can_attach:
+                continue
+
+            evidence = self._build_evidence(identity, ["iam:AttachGroupPolicy"])
+            matches.append(TechniqueMatch(
+                technique_id=self.technique_id,
+                technique_name=self.name,
+                severity=self.severity,
+                origin_arn=identity.arn,
+                origin_name=identity.name,
+                target_arn="sxaiam::admin",
+                target_name=group.name,
+                description=self.description,
+                evidence=evidence,
+                attack_steps=[
+                    f"1. Call iam:AttachGroupPolicy with GroupName={group.name} "
+                    f"and PolicyArn={admin_policy_arn}",
+                    f"2. All members of {group.name} immediately inherit "
+                    "AdministratorAccess",
+                ],
+            ))
+
+        return matches
+
+
+TechniqueRegistry.register(AttachGroupPolicyTechnique())
+
+
+
+# ---------------------------------------------------------------------------
+# Technique 14 — UpdateAssumeRolePolicy (trust policy hijack)
+# ---------------------------------------------------------------------------
+
+class UpdateAssumeRolePolicyTechnique(EscalationTechnique):
+    """
+    The attacker has iam:UpdateAssumeRolePolicy and sts:AssumeRole.
+    They modify the trust policy of a privileged role to allow themselves
+    to assume it, then call sts:AssumeRole to gain its permissions.
+
+    Permissions needed:
+      - iam:UpdateAssumeRolePolicy (on a target role or *)
+      - sts:AssumeRole (on the same role or *)
+    """
+
+    @property
+    def technique_id(self) -> str:
+        return "update-assume-role-policy"
+
+    @property
+    def name(self) -> str:
+        return "UpdateAssumeRolePolicy trust hijack"
+
+    @property
+    def severity(self) -> Severity:
+        return Severity.HIGH
+
+    @property
+    def required_actions(self) -> list[str]:
+        return ["iam:UpdateAssumeRolePolicy", "sts:AssumeRole"]
+
+    @property
+    def description(self) -> str:
+        return (
+            "The identity has iam:UpdateAssumeRolePolicy on a privileged role. "
+            "By modifying the trust policy to allow itself to assume that role, "
+            "the attacker can then call sts:AssumeRole and inherit all of the "
+            "role's permissions."
+        )
+
+    def check(self, identity, snapshot) -> list[TechniqueMatch]:
+        matches = []
+
+        for role in snapshot.roles:
+            if role.arn == identity.arn:
+                continue
+
+            if not role.attached_policies and not role.inline_policies:
+                continue
+
+            can_update = (
+                identity.can("iam:UpdateAssumeRolePolicy", role.arn)
+                or identity.can("iam:UpdateAssumeRolePolicy", "*")
+            )
+            if not can_update:
+                continue
+
+            can_assume = (
+                identity.can("sts:AssumeRole", role.arn)
+                or identity.can("sts:AssumeRole", "*")
+            )
+            if not can_assume:
+                continue
+
+            evidence = self._build_evidence(
+                identity,
+                ["iam:UpdateAssumeRolePolicy", "sts:AssumeRole"],
+            )
+            matches.append(TechniqueMatch(
+                technique_id=self.technique_id,
+                technique_name=self.name,
+                severity=self.severity,
+                origin_arn=identity.arn,
+                origin_name=identity.name,
+                target_arn="sxaiam::admin",
+                target_name=role.name,
+                description=self.description,
+                evidence=evidence,
+                attack_steps=[
+                    f"1. Call iam:UpdateAssumeRolePolicy on {role.arn} "
+                    f"to add {identity.arn} as a trusted principal",
+                    f"2. Call sts:AssumeRole with RoleArn={role.arn}",
+                    f"3. Operate as {role.name} with its full permissions",
+                ],
+            ))
+
+        return matches
+
+
+TechniqueRegistry.register(UpdateAssumeRolePolicyTechnique())
+
 # ---------------------------------------------------------------------------
 # Registry — all techniques available in sxaiam
 # ---------------------------------------------------------------------------
+

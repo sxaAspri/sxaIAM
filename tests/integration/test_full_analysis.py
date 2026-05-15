@@ -16,9 +16,14 @@ The handcrafted snapshot mirrors the current Terraform sandbox coverage:
   path7: password_reset_user   with iam:UpdateLoginProfile        -> HIGH
   path8: policy_manager_user   with iam:SetDefaultPolicyVersion   -> HIGH
   path9: contractor_user       with iam:AddUserToGroup            -> HIGH
+  path10: put_user_policy_user with iam:PutUserPolicy             -> HIGH
+  path11: put_role_policy_user with iam:PutRolePolicy             -> HIGH
+  path12: put_group_policy_user with iam:PutGroupPolicy           -> HIGH
+  path13: attach_group_policy_user with iam:AttachGroupPolicy     -> HIGH
+  path14: update_assume_role_user with iam:UpdateAssumeRolePolicy -> HIGH
 
 Success criteria:
-  - 9/9 escalation techniques are detected in the pipeline output
+  - 14/14 escalation techniques are detected in the pipeline output
   - Every path contains at least one explicit evidence-bearing step
   - Every evidence item references the concrete IAM action that justifies it
   - CRITICAL paths are ordered before HIGH paths in the final output
@@ -68,11 +73,17 @@ PASSWORD_RESET_ARN = f"arn:aws:iam::{ACCOUNT_ID}:user/password_reset_user"
 FINANCE_ARN = f"arn:aws:iam::{ACCOUNT_ID}:user/finance_user"
 POLICY_MANAGER_ARN = f"arn:aws:iam::{ACCOUNT_ID}:user/policy_manager_user"
 CONTRACTOR_ARN = f"arn:aws:iam::{ACCOUNT_ID}:user/contractor_user"
+PUT_USER_POLICY_ARN = f"arn:aws:iam::{ACCOUNT_ID}:user/put_user_policy_user"
+PUT_ROLE_POLICY_ARN = f"arn:aws:iam::{ACCOUNT_ID}:user/put_role_policy_user"
+PUT_GROUP_POLICY_ARN = f"arn:aws:iam::{ACCOUNT_ID}:user/put_group_policy_user"
+ATTACH_GROUP_POLICY_ARN = f"arn:aws:iam::{ACCOUNT_ID}:user/attach_group_policy_user"
+UPDATE_ASSUME_ROLE_ARN = f"arn:aws:iam::{ACCOUNT_ID}:user/update_assume_role_user"
 
 # Role ARNs
 CI_ROLE_ARN = f"arn:aws:iam::{ACCOUNT_ID}:role/ci_role"
 ADMIN_ROLE_ARN = f"arn:aws:iam::{ACCOUNT_ID}:role/admin_role"
 LAMBDA_ROLE_ARN = f"arn:aws:iam::{ACCOUNT_ID}:role/lambda_exec_role"
+ASSUMABLE_ROLE_ARN = f"arn:aws:iam::{ACCOUNT_ID}:role/assumable_role"
 
 # Group ARNs
 ADMIN_GROUP_ARN = f"arn:aws:iam::{ACCOUNT_ID}:group/admin_group"
@@ -215,6 +226,47 @@ def sandbox_snapshot() -> IAMSnapshot:
         is_aws_managed=False,
         document=_inline_doc(["iam:AddUserToGroup"], [ADMIN_GROUP_ARN]),
     )
+    put_user_policy_policy = IAMPolicy(
+        name="PutUserPolicyPolicy",
+        arn=f"arn:aws:iam::{ACCOUNT_ID}:policy/PutUserPolicyPolicy",
+        policy_id="PID-PUT-USER",
+        is_aws_managed=False,
+        document=_inline_doc(["iam:PutUserPolicy"], [PUT_USER_POLICY_ARN]),
+    )
+    put_role_policy_policy = IAMPolicy(
+        name="PutRolePolicyPolicy",
+        arn=f"arn:aws:iam::{ACCOUNT_ID}:policy/PutRolePolicyPolicy",
+        policy_id="PID-PUT-ROLE",
+        is_aws_managed=False,
+        document=_inline_doc(
+            ["iam:PutRolePolicy", "sts:AssumeRole"],
+            [ASSUMABLE_ROLE_ARN],
+        ),
+    )
+    put_group_policy_policy = IAMPolicy(
+        name="PutGroupPolicyPolicy",
+        arn=f"arn:aws:iam::{ACCOUNT_ID}:policy/PutGroupPolicyPolicy",
+        policy_id="PID-PUT-GROUP",
+        is_aws_managed=False,
+        document=_inline_doc(["iam:PutGroupPolicy"], [ADMIN_GROUP_ARN]),
+    )
+    attach_group_policy_policy = IAMPolicy(
+        name="AttachGroupPolicyPolicy",
+        arn=f"arn:aws:iam::{ACCOUNT_ID}:policy/AttachGroupPolicyPolicy",
+        policy_id="PID-ATTACH-GROUP",
+        is_aws_managed=False,
+        document=_inline_doc(["iam:AttachGroupPolicy"], [ADMIN_GROUP_ARN]),
+    )
+    update_assume_role_policy = IAMPolicy(
+        name="UpdateAssumeRolePolicy",
+        arn=f"arn:aws:iam::{ACCOUNT_ID}:policy/UpdateAssumeRolePolicy",
+        policy_id="PID-UPDATE-ASSUME",
+        is_aws_managed=False,
+        document=_inline_doc(
+            ["iam:UpdateAssumeRolePolicy", "sts:AssumeRole"],
+            [ASSUMABLE_ROLE_ARN],
+        ),
+    )
 
     low_priv = IAMUser(
         arn=LOW_PRIV_ARN,
@@ -278,6 +330,31 @@ def sandbox_snapshot() -> IAMSnapshot:
         "contractor_user",
         attached_policies=[_attached("ContractorGroupPolicy", contractor_policy.arn)],
     )
+    put_user_policy_user = _make_user(
+        PUT_USER_POLICY_ARN,
+        "put_user_policy_user",
+        attached_policies=[_attached("PutUserPolicyPolicy", put_user_policy_policy.arn)],
+    )
+    put_role_policy_user = _make_user(
+        PUT_ROLE_POLICY_ARN,
+        "put_role_policy_user",
+        attached_policies=[_attached("PutRolePolicyPolicy", put_role_policy_policy.arn)],
+    )
+    put_group_policy_user = _make_user(
+        PUT_GROUP_POLICY_ARN,
+        "put_group_policy_user",
+        attached_policies=[_attached("PutGroupPolicyPolicy", put_group_policy_policy.arn)],
+    )
+    attach_group_policy_user = _make_user(
+        ATTACH_GROUP_POLICY_ARN,
+        "attach_group_policy_user",
+        attached_policies=[_attached("AttachGroupPolicyPolicy", attach_group_policy_policy.arn)],
+    )
+    update_assume_role_user = _make_user(
+        UPDATE_ASSUME_ROLE_ARN,
+        "update_assume_role_user",
+        attached_policies=[_attached("UpdateAssumeRolePolicy", update_assume_role_policy.arn)],
+    )
 
     ci_role = _make_role(
         CI_ROLE_ARN,
@@ -297,6 +374,13 @@ def sandbox_snapshot() -> IAMSnapshot:
         inline_actions=["s3:GetObject"],
         attached_policies=[_attached("PowerUserAccess", POWERUSER_POLICY_ARN)],
         trust_services=["lambda.amazonaws.com"],
+    )
+    assumable_role = _make_role(
+        ASSUMABLE_ROLE_ARN,
+        "assumable_role",
+        inline_actions=["s3:GetObject"],
+        attached_policies=[_attached("AdministratorAccess", ADMIN_POLICY_ARN)],
+        trust_services=["ec2.amazonaws.com"],
     )
 
     admin_group = IAMGroup(
@@ -324,8 +408,13 @@ def sandbox_snapshot() -> IAMSnapshot:
             finance_user,
             policy_manager,
             contractor,
+            put_user_policy_user,
+            put_role_policy_user,
+            put_group_policy_user,
+            attach_group_policy_user,
+            update_assume_role_user,
         ],
-        roles=[ci_role, admin_role, lambda_role],
+        roles=[ci_role, admin_role, lambda_role, assumable_role],
         groups=[admin_group],
         policies=[
             deployment_policy,
@@ -334,6 +423,11 @@ def sandbox_snapshot() -> IAMSnapshot:
             helpdesk_policy,
             password_reset_policy,
             contractor_policy,
+            put_user_policy_policy,
+            put_role_policy_policy,
+            put_group_policy_policy,
+            attach_group_policy_policy,
+            update_assume_role_policy,
         ],
     )
     snapshot.build_indexes()
@@ -360,10 +454,10 @@ def escalation_paths(
 
 
 # ---------------------------------------------------------------------------
-# Tests - 9/9 techniques detected
+# Tests - 14/14 techniques detected
 # ---------------------------------------------------------------------------
 
-class TestNinePathsDetected:
+class TestFourteenPathsDetected:
     """Verify the snapshot yields the full current technique set."""
 
     EXPECTED_TECHNIQUES = {
@@ -376,6 +470,11 @@ class TestNinePathsDetected:
         "update-login-profile",
         "set-default-policy-version",
         "add-user-to-group",
+        "put-user-policy",
+        "put-role-policy",
+        "put-group-policy",
+        "attach-group-policy",
+        "update-assume-role-policy",
     }
 
     def _get_techniques(self, paths: list) -> set[str]:
@@ -386,9 +485,9 @@ class TestNinePathsDetected:
                     techniques.add(step.technique_id)
         return techniques
 
-    def test_at_least_nine_paths_found(self, escalation_paths: list):
-        assert len(escalation_paths) >= 9, (
-            f"Expected at least 9 escalation paths, found {len(escalation_paths)}"
+    def test_at_least_fourteen_paths_found(self, escalation_paths: list):
+        assert len(escalation_paths) >= 14, (
+            f"Expected at least 14 escalation paths, found {len(escalation_paths)}"
         )
 
     def test_all_expected_techniques_detected(self, escalation_paths: list):
@@ -410,6 +509,11 @@ class TestNinePathsDetected:
             (POLICY_MANAGER_ARN, "policy_manager_user"),
             (CONTRACTOR_ARN, "contractor_user"),
             (CI_ROLE_ARN, "ci_role"),
+            (PUT_USER_POLICY_ARN, "put_user_policy_user"),
+            (PUT_ROLE_POLICY_ARN, "put_role_policy_user"),
+            (PUT_GROUP_POLICY_ARN, "put_group_policy_user"),
+            (ATTACH_GROUP_POLICY_ARN, "attach_group_policy_user"),
+            (UPDATE_ASSUME_ROLE_ARN, "update_assume_role_user"),
         ],
     )
     def test_expected_identity_has_path(self, escalation_paths: list, origin_arn: str, name: str):
