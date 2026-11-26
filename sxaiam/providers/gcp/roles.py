@@ -14,6 +14,9 @@ con una advertencia (fuera de alcance, ver planning/gcp-poc-plan.md §4).
 
 from __future__ import annotations
 
+# Único rol que la PoC considera admin del proyecto (editor no: no puede tocar IAM)
+ADMIN_ROLE = "roles/owner"
+
 # Permisos que consultan las técnicas
 SET_PROJECT_IAM_POLICY = "resourcemanager.projects.setIamPolicy"
 GET_SA_ACCESS_TOKEN = "iam.serviceAccounts.getAccessToken"

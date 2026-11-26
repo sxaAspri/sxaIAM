@@ -44,7 +44,7 @@ Por qué funciona: `PathFinder` solo recorre un `nx.DiGraph` buscando el nodo co
 | ID | Permiso clave | Ruta | Severidad | Equivalente AWS |
 |---|---|---|---|---|
 | `gcp-set-iam-policy` | `resourcemanager.projects.setIamPolicy` sobre el proyecto | principal → admin (1 salto) | CRITICAL | AttachPolicy |
-| `gcp-sa-impersonation` | `iam.serviceAccounts.getAccessToken` sobre una SA (rol `roles/iam.serviceAccountTokenCreator`) | principal → SA → admin (2 saltos, si la SA es owner/editor) | HIGH en la arista principal→SA | AssumeRole |
+| `gcp-sa-impersonation` | `iam.serviceAccounts.getAccessToken` sobre una SA (rol `roles/iam.serviceAccountTokenCreator`) | principal → SA (arista hacia **cualquier** SA suplantable; el grafo decide si llega a admin) | HIGH en la arista principal→SA | AssumeRole |
 
 Siguiente técnica natural (fuera del alcance de la PoC): `iam.serviceAccountKeys.create` (≈ CreateAccessKey).
 
@@ -103,7 +103,7 @@ Resultado esperado sobre el fixture:
 | `user:alice` | `projectIamAdmin` en el proyecto | ✅ T1 → admin (1 salto, CRITICAL) |
 | `user:bob` | `tokenCreator` sobre `deployer@` (owner) | ✅ T2 → deployer → admin (2 saltos, HIGH) |
 | `user:carol` | `viewer` | ❌ sin ruta |
-| `serviceAccount:ci-runner@` | `tokenCreator` sobre `reader@` (solo viewer) | ❌ arista ci-runner→reader, pero sin ruta a admin |
+| `serviceAccount:ci-runner@` | `tokenCreator` sobre `reader@` (solo viewer) | ❌ arista ci-runner→reader (T2), pero sin ruta a admin |
 | `user:dave` | `projectIamAdmin` **con condition** | ⚠️ ignorado + advertencia, sin ruta |
 | `serviceAccount:deployer@` | `owner` en el proyecto | arista `already-admin` (INFO); su ruta cruda se filtra |
 
@@ -152,6 +152,19 @@ Resultado esperado sobre el fixture:
   - Técnica 1 también con `roles/iam.securityAdmin` (tiene `setIamPolicy`), usando un **snapshot sintético**
     en los tests de la técnica, no el fixture.
 
+**Estado: hecho (2026-11-26).** 22 tests en `tests/unit/providers/gcp/test_techniques.py`. Decisiones:
+- Id de nodo de una SA = su miembro `serviceAccount:<email>`: el mismo nodo es origen (cuando la SA actúa)
+  y destino (cuando la suplantan). Es el `target_arn` de la técnica 2.
+- **La técnica 2 crea arista hacia CUALQUIER SA suplantable** (HIGH), sea admin o no. El grafo decide si la
+  cadena llega a admin; ese es el valor de usar PathFinder. Esto **reemplaza** el "si la SA es owner/editor"
+  de §3: `ci-runner → reader` es positivo de T2 (hay arista), aunque sin ruta a admin.
+- "Ya es admin" = `roles/owner` **sin condición** a nivel proyecto: `is_admin_member()` en `resolver.py`,
+  para el builder de la Fase 4. Constante `ADMIN_ROLE` en `roles.py`.
+- Se ignora la autoimpersonación (SA con `tokenCreator` sobre sí misma).
+- `GCPTechniqueRegistry` es una clase **independiente** del `TechniqueRegistry` AWS: el `_techniques` de AWS
+  es un dict de clase y heredarlo compartiría el estado. Un test verifica que el registry AWS sigue con 14.
+- Agregado `GCPResolvedPrincipal.name` (`user:alice@x` → `alice@x`) para `origin_name`.
+
 ### Fase 4 — Grafo
 - `sxaiam/providers/gcp/builder.py` (`GCPAttackGraph`):
   - Nodos: principales, SAs y `AdminNode`. Subclases de `IAMNode` con tipos nuevos (`gcp_user`, `gcp_service_account`).
@@ -169,6 +182,9 @@ Resultado esperado sobre el fixture:
   - `PathFinder(G).find_all_paths()` crudo devuelve **3 rutas**: alice→admin, bob→deployer→admin, deployer→admin.
   - Tras el filtro quedan **2 rutas**: alice (1 salto) y bob (2 saltos).
   - La ruta de bob tiene severidad **HIGH**, no CRITICAL; y la arista `deployer → admin` es `already-admin`/INFO.
+  - `ci-runner → reader` es arista del grafo pero no aparece en ninguna ruta.
+  - Snapshot sintético: principal → (T2) → SA con `projectIamAdmin` → (T1) → admin. Debe salir **1 ruta de
+    2 pasos con severidad CRITICAL** (la severidad de una ruta es la máxima de sus pasos: max(HIGH, CRITICAL)).
 
 ### Fase 5 — CLI
 - En `sxaiam/cli.py`: subcomando tipo `sxaiam gcp scan --snapshot proyecto.json --output report.json`.

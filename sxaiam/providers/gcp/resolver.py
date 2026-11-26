@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 
 from sxaiam.providers.gcp.models import GCPBinding, GCPSnapshot
-from sxaiam.providers.gcp.roles import permissions_for_role
+from sxaiam.providers.gcp.roles import ADMIN_ROLE, permissions_for_role
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +83,23 @@ def parse_member_kind(member: str) -> MemberKind | None:
     return None
 
 
+def member_display_name(member: str) -> str:
+    """``user:alice@x.com`` → ``alice@x.com``; ``allUsers`` → ``allUsers``."""
+    _, sep, rest = member.partition(":")
+    return rest if sep else member
+
+
+def is_admin_member(member: str, snapshot: GCPSnapshot) -> bool:
+    """
+    True si el miembro ya es admin: tiene ``roles/owner`` **sin condición**
+    a nivel proyecto. Lo usan la técnica de impersonación y el builder.
+    """
+    return any(
+        b.role == ADMIN_ROLE and not b.is_conditional and member in b.members
+        for b in snapshot.project_bindings
+    )
+
+
 # ---------------------------------------------------------------------------
 # Resultado
 # ---------------------------------------------------------------------------
@@ -117,6 +134,10 @@ class GCPResolvedPrincipal:
     member: str
     kind: MemberKind
     permissions: list[GCPPermission] = field(default_factory=list)
+
+    @property
+    def name(self) -> str:
+        return member_display_name(self.member)
 
     def can(self, permission: str, resource: str) -> bool:
         return any(
