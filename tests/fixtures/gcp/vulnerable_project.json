@@ -1,0 +1,77 @@
+{
+  "project_id": "acme-poc-123456",
+  "project_iam_policy": {
+    "bindings": [
+      {
+        "role": "roles/owner",
+        "members": [
+          "serviceAccount:deployer@acme-poc-123456.iam.gserviceaccount.com"
+        ]
+      },
+      {
+        "role": "roles/resourcemanager.projectIamAdmin",
+        "members": [
+          "user:alice@acme-poc.example"
+        ]
+      },
+      {
+        "role": "roles/resourcemanager.projectIamAdmin",
+        "members": [
+          "user:dave@acme-poc.example"
+        ],
+        "condition": {
+          "title": "expira-fin-de-anio",
+          "description": "Acceso temporal hasta el 31/12/2026",
+          "expression": "request.time < timestamp(\"2026-12-31T23:59:59Z\")"
+        }
+      },
+      {
+        "role": "roles/viewer",
+        "members": [
+          "user:carol@acme-poc.example",
+          "serviceAccount:reader@acme-poc-123456.iam.gserviceaccount.com"
+        ]
+      }
+    ],
+    "etag": "BwYZ3k1Qx0E=",
+    "version": 3
+  },
+  "service_accounts": [
+    {
+      "email": "deployer@acme-poc-123456.iam.gserviceaccount.com",
+      "iam_policy": {
+        "bindings": [
+          {
+            "role": "roles/iam.serviceAccountTokenCreator",
+            "members": [
+              "user:bob@acme-poc.example"
+            ]
+          }
+        ],
+        "etag": "BwYZ3k2aT4c=",
+        "version": 1
+      }
+    },
+    {
+      "email": "reader@acme-poc-123456.iam.gserviceaccount.com",
+      "iam_policy": {
+        "bindings": [
+          {
+            "role": "roles/iam.serviceAccountTokenCreator",
+            "members": [
+              "serviceAccount:ci-runner@acme-poc-123456.iam.gserviceaccount.com"
+            ]
+          }
+        ],
+        "etag": "BwYZ3k3bU5d=",
+        "version": 1
+      }
+    },
+    {
+      "email": "ci-runner@acme-poc-123456.iam.gserviceaccount.com",
+      "iam_policy": {
+        "etag": "ACAB"
+      }
+    }
+  ]
+}
