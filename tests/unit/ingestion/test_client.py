@@ -141,3 +141,23 @@ class TestIngestionClientCollect:
         assert snapshot.users == []
         assert snapshot.roles == []
         assert snapshot.scps == []
+
+    @mock_aws
+    def test_group_membership_from_users(self) -> None:
+        # GetAccountAuthorizationDetails only reports membership in each user's
+        # GroupList; collect() derives group.member_names from it.
+        iam = boto3.client("iam", region_name="us-east-1")
+        create_test_user(iam, "alice")
+        create_test_user(iam, "bob")
+        iam.create_group(GroupName="devs")
+        iam.create_group(GroupName="empty")
+        iam.add_user_to_group(GroupName="devs", UserName="alice")
+
+        snapshot = make_client().collect()
+        users = {u.name: u for u in snapshot.users}
+        groups = {g.name: g for g in snapshot.groups}
+
+        assert users["alice"].group_names == ["devs"]
+        assert users["bob"].group_names == []
+        assert groups["devs"].member_names == ["alice"]
+        assert groups["empty"].member_names == []

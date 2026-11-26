@@ -94,6 +94,7 @@ class IngestionClient:
         roles = [self._parse_role(r) for r in raw["roles"]]
         groups = [self._parse_group(g) for g in raw["groups"]]
         policies = [self._parse_policy(p) for p in raw["policies"]]
+        _populate_group_members(users, groups)
 
         scps = SCPFetcher(self._session).fetch()
         if scps:
@@ -290,3 +291,20 @@ class IngestionClient:
             is_aws_managed=arn.startswith("arn:aws:iam::aws:"),
             document=document,
         )
+
+
+def _populate_group_members(users: list[IAMUser], groups: list[IAMGroup]) -> None:
+    """
+    Derive IAMGroup.member_names from IAMUser.group_names.
+
+    GetAccountAuthorizationDetails does not list members in GroupDetailList;
+    membership only comes in each user's GroupList. user.group_names stays the
+    source of truth (the resolver and the group techniques read it);
+    member_names is the same data seen from the group side.
+    """
+    by_name = {g.name: g for g in groups}
+    for user in users:
+        for group_name in user.group_names:
+            group = by_name.get(group_name)
+            if group is not None and user.name not in group.member_names:
+                group.member_names.append(user.name)
