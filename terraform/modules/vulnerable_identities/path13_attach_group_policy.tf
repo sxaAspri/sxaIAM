@@ -1,19 +1,19 @@
 # =============================================================================
 # RUTA DE ATAQUE 13: AttachGroupPolicy escalation
 #
-# Técnica: el atacante tiene iam:AttachGroupPolicy sobre un grupo.
-# Adjunta AdministratorAccess directamente al grupo. Todos los miembros
-# heredan acceso de administrador inmediatamente.
+# Técnica: el atacante es miembro de un grupo y tiene iam:AttachGroupPolicy
+# sobre él. Adjunta AdministratorAccess directamente al grupo y, como miembro,
+# la hereda inmediatamente.
 #
 # Cadena:
-#   attach_group_policy_user
+#   attach_group_policy_user (miembro de escalation_group)
 #     → iam:AttachGroupPolicy on escalation_group
 #     → adjunta arn:aws:iam::aws:policy/AdministratorAccess
-#     → todos los miembros de escalation_group heredan admin
+#     → attach_group_policy_user hereda admin como miembro de escalation_group
 #
 # Lo que sxaiam debe detectar:
-#   attach_group_policy_user tiene iam:AttachGroupPolicy sobre un grupo
-#   → puede adjuntar AdministratorAccess y escalar a admin
+#   attach_group_policy_user es miembro de un grupo y tiene
+#   iam:AttachGroupPolicy sobre él → puede adjuntar AdministratorAccess y escalar
 # =============================================================================
 
 resource "aws_iam_group" "escalation_group" {
@@ -53,4 +53,11 @@ resource "aws_iam_user" "attach_group_policy_user" {
 resource "aws_iam_user_policy_attachment" "attach_group_policy_permissions" {
   user       = aws_iam_user.attach_group_policy_user.name
   policy_arn = aws_iam_policy.attach_group_policy_permissions.arn
+}
+
+# El atacante debe ser miembro del grupo: sin membresía, adjuntar
+# AdministratorAccess a escalation_group no le da ningún permiso.
+resource "aws_iam_user_group_membership" "attach_group_policy_user_membership" {
+  user   = aws_iam_user.attach_group_policy_user.name
+  groups = [aws_iam_group.escalation_group.name]
 }

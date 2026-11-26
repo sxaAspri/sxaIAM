@@ -947,154 +947,159 @@ class TestPutRolePolicy:
         assert len(matches) == 0
 
 # ---------------------------------------------------------------------------
-# Technique 12 — PutGroupPolicy
+# Techniques 12 & 13 — group policy escalation (attacker must be a member)
 # ---------------------------------------------------------------------------
+
+def _group_scenario(
+    action: str,
+    *,
+    member: bool,
+    group_policies: bool = True,
+) -> tuple[IAMSnapshot, ResolvedIdentity, "IAMGroup"]:
+    """
+    A user with `action` on a group. `member` controls whether the user
+    belongs to the group (user.group_names + group.member_names, as
+    IngestionClient.collect leaves them).
+    """
+    from sxaiam.ingestion.models import IAMGroup
+
+    group = IAMGroup(
+        name="target-group",
+        arn="arn:aws:iam::123:group/target-group",
+        group_id="GIDTARGET",
+        attached_policies=[AttachedPolicy(
+            PolicyName="ReadOnlyAccess",
+            PolicyArn="arn:aws:iam::aws:policy/ReadOnlyAccess",
+        )] if group_policies else [],
+        member_names=["attacker-user"] if member else [],
+    )
+    policy = IAMPolicy(
+        name="GroupPerms",
+        arn="arn:aws:iam::123:policy/GroupPerms",
+        policy_id="PIDGROUP",
+        is_aws_managed=False,
+        document=make_doc([action], [group.arn]),
+    )
+    attacker = IAMUser(
+        name="attacker-user",
+        arn="arn:aws:iam::123:user/attacker-user",
+        user_id="UIDATTACKER",
+        attached_policies=[AttachedPolicy(
+            PolicyName="GroupPerms",
+            PolicyArn="arn:aws:iam::123:policy/GroupPerms",
+        )],
+        group_names=["target-group"] if member else [],
+    )
+    snapshot = make_snapshot(users=[attacker], policies=[policy])
+    snapshot.groups = [group]
+    return snapshot, resolve_user(attacker, snapshot), group
+
+
+def _role_with_group_permission(action: str) -> tuple[IAMSnapshot, ResolvedIdentity]:
+    """A role with `action` on a group. Roles can never be group members."""
+    from sxaiam.ingestion.models import IAMGroup
+
+    group = IAMGroup(
+        name="target-group",
+        arn="arn:aws:iam::123:group/target-group",
+        group_id="GIDTARGET",
+    )
+    policy = IAMPolicy(
+        name="GroupPerms",
+        arn="arn:aws:iam::123:policy/GroupPerms",
+        policy_id="PIDGROUP",
+        is_aws_managed=False,
+        document=make_doc([action], [group.arn]),
+    )
+    role = IAMRole(
+        name="ci-role",
+        arn="arn:aws:iam::123:role/ci-role",
+        role_id="RIDCI",
+        trust_policy=make_trust_doc("ec2.amazonaws.com"),
+        attached_policies=[AttachedPolicy(
+            PolicyName="GroupPerms",
+            PolicyArn="arn:aws:iam::123:policy/GroupPerms",
+        )],
+    )
+    snapshot = make_snapshot(roles=[role], policies=[policy])
+    snapshot.groups = [group]
+    return snapshot, PolicyResolver(snapshot).resolve_role(role)
+
+
 class TestPutGroupPolicy:
 
-    def test_detects_put_group_policy(self) -> None:
-        from sxaiam.ingestion.models import IAMGroup
+    def test_detects_when_attacker_is_member(self) -> None:
         from sxaiam.findings.techniques import PutGroupPolicyTechnique
 
-        target_group = IAMGroup(
-            name="dev-group",
-            arn="arn:aws:iam::123:group/dev-group",
-            group_id="GID10",
-            attached_policies=[AttachedPolicy(
-                PolicyName="PowerUserAccess",
-                PolicyArn="arn:aws:iam::aws:policy/PowerUserAccess",
-            )],
-        )
-        attacker_policy = IAMPolicy(
-            name="PutGroupPerms",
-            arn="arn:aws:iam::123:policy/PutGroupPerms",
-            policy_id="PID22",
-            is_aws_managed=False,
-            document=make_doc(["iam:PutGroupPolicy"], [target_group.arn]),
-        )
-        attacker = IAMUser(
-            name="attacker-user",
-            arn="arn:aws:iam::123:user/attacker-user",
-            user_id="UID34",
-            attached_policies=[AttachedPolicy(
-                PolicyName="PutGroupPerms",
-                PolicyArn="arn:aws:iam::123:policy/PutGroupPerms",
-            )],
-        )
-        snapshot = make_snapshot(
-            users=[attacker], policies=[attacker_policy]
-        )
-        snapshot.groups = [target_group]
-        identity = resolve_user(attacker, snapshot)
+        snapshot, identity, group = _group_scenario("iam:PutGroupPolicy", member=True)
         matches = PutGroupPolicyTechnique().check(identity, snapshot)
 
-        assert len(matches) >= 1
+        assert len(matches) == 1
         assert matches[0].target_arn == "sxaiam::admin"
         assert matches[0].severity == Severity.CRITICAL
-        assert matches[0].target_name == target_group.name
+        assert matches[0].target_name == group.name
+        assert "attacker-user, a member of target-group" in matches[0].attack_steps[1]
 
-    def test_no_match_when_group_has_no_policies(self) -> None:
-        from sxaiam.ingestion.models import IAMGroup
+    def test_no_match_when_attacker_is_not_member(self) -> None:
+        # Falso positivo corregido: el permiso solo no basta si no es miembro
         from sxaiam.findings.techniques import PutGroupPolicyTechnique
 
-        empty_group = IAMGroup(
-            name="empty-group",
-            arn="arn:aws:iam::123:group/empty-group",
-            group_id="GID11",
-            attached_policies=[],
+        snapshot, identity, _ = _group_scenario("iam:PutGroupPolicy", member=False)
+        assert PutGroupPolicyTechnique().check(identity, snapshot) == []
+
+    def test_detects_when_group_has_no_policies(self) -> None:
+        # PutGroupPolicy crea la inline policy: el grupo no necesita políticas previas
+        from sxaiam.findings.techniques import PutGroupPolicyTechnique
+
+        snapshot, identity, _ = _group_scenario(
+            "iam:PutGroupPolicy", member=True, group_policies=False,
         )
-        policy = IAMPolicy(
-            name="PutGroupPerms2",
-            arn="arn:aws:iam::123:policy/PutGroupPerms2",
-            policy_id="PID23",
-            is_aws_managed=False,
-            document=make_doc(["iam:PutGroupPolicy"], [empty_group.arn]),
-        )
-        user = IAMUser(
-            name="user",
-            arn="arn:aws:iam::123:user/user",
-            user_id="UID35",
-            attached_policies=[AttachedPolicy(
-                PolicyName="PutGroupPerms2",
-                PolicyArn="arn:aws:iam::123:policy/PutGroupPerms2",
-            )],
-        )
-        snapshot = make_snapshot(users=[user], policies=[policy])
-        snapshot.groups = [empty_group]
-        identity = resolve_user(user, snapshot)
-        matches = PutGroupPolicyTechnique().check(identity, snapshot)
-        assert len(matches) == 0
-# ---------------------------------------------------------------------------
-# Technique 13 — AttachGroupPolicy
-# ---------------------------------------------------------------------------
+        assert len(PutGroupPolicyTechnique().check(identity, snapshot)) == 1
+
+    def test_no_match_for_role(self) -> None:
+        from sxaiam.findings.techniques import PutGroupPolicyTechnique
+
+        snapshot, identity = _role_with_group_permission("iam:PutGroupPolicy")
+        assert identity.can("iam:PutGroupPolicy", "arn:aws:iam::123:group/target-group")
+        assert PutGroupPolicyTechnique().check(identity, snapshot) == []
+
+
 class TestAttachGroupPolicy:
 
-    def test_detects_attach_group_policy(self) -> None:
-        from sxaiam.ingestion.models import IAMGroup
+    def test_detects_when_attacker_is_member(self) -> None:
         from sxaiam.findings.techniques import AttachGroupPolicyTechnique
 
-        target_group = IAMGroup(
-            name="admin-group",
-            arn="arn:aws:iam::123:group/admin-group",
-            group_id="GID12",
-            attached_policies=[],
+        snapshot, identity, group = _group_scenario(
+            "iam:AttachGroupPolicy", member=True, group_policies=False,
         )
-        attacker_policy = IAMPolicy(
-            name="AttachGroupPerms",
-            arn="arn:aws:iam::123:policy/AttachGroupPerms",
-            policy_id="PID24",
-            is_aws_managed=False,
-            document=make_doc(["iam:AttachGroupPolicy"], [target_group.arn]),
-        )
-        attacker = IAMUser(
-            name="attacker-user",
-            arn="arn:aws:iam::123:user/attacker-user",
-            user_id="UID36",
-            attached_policies=[AttachedPolicy(
-                PolicyName="AttachGroupPerms",
-                PolicyArn="arn:aws:iam::123:policy/AttachGroupPerms",
-            )],
-        )
-        snapshot = make_snapshot(
-            users=[attacker], policies=[attacker_policy]
-        )
-        snapshot.groups = [target_group]
-        identity = resolve_user(attacker, snapshot)
         matches = AttachGroupPolicyTechnique().check(identity, snapshot)
 
-        assert len(matches) >= 1
+        assert len(matches) == 1
         assert matches[0].target_arn == "sxaiam::admin"
         assert matches[0].severity == Severity.CRITICAL
-        assert matches[0].target_name == target_group.name
+        assert matches[0].target_name == group.name
+        assert "attacker-user, a member of target-group" in matches[0].attack_steps[1]
 
-    def test_no_match_without_permission(self) -> None:
-        from sxaiam.ingestion.models import IAMGroup
+    def test_no_match_when_attacker_is_not_member(self) -> None:
+        # Falso positivo corregido: el permiso solo no basta si no es miembro
         from sxaiam.findings.techniques import AttachGroupPolicyTechnique
 
-        group = IAMGroup(
-            name="some-group",
-            arn="arn:aws:iam::123:group/some-group",
-            group_id="GID13",
-            attached_policies=[],
-        )
-        policy = make_policy(
-            "SafePerms3",
-            "arn:aws:iam::123:policy/SafePerms3",
-            "s3:GetObject",
-        )
-        user = IAMUser(
-            name="safe-user",
-            arn="arn:aws:iam::123:user/safe-user",
-            user_id="UID37",
-            attached_policies=[AttachedPolicy(
-                PolicyName="SafePerms3",
-                PolicyArn="arn:aws:iam::123:policy/SafePerms3",
-            )],
-        )
-        snapshot = make_snapshot(users=[user], policies=[policy])
-        snapshot.groups = [group]
-        identity = resolve_user(user, snapshot)
-        matches = AttachGroupPolicyTechnique().check(identity, snapshot)
-        assert len(matches) == 0
+        snapshot, identity, _ = _group_scenario("iam:AttachGroupPolicy", member=False)
+        assert AttachGroupPolicyTechnique().check(identity, snapshot) == []
+
+    def test_no_match_without_permission(self) -> None:
+        from sxaiam.findings.techniques import AttachGroupPolicyTechnique
+
+        snapshot, identity, _ = _group_scenario("s3:GetObject", member=True)
+        assert AttachGroupPolicyTechnique().check(identity, snapshot) == []
+
+    def test_no_match_for_role(self) -> None:
+        from sxaiam.findings.techniques import AttachGroupPolicyTechnique
+
+        snapshot, identity = _role_with_group_permission("iam:AttachGroupPolicy")
+        assert identity.can("iam:AttachGroupPolicy", "arn:aws:iam::123:group/target-group")
+        assert AttachGroupPolicyTechnique().check(identity, snapshot) == []
+
 # ---------------------------------------------------------------------------
 # Technique 14 — UpdateAssumeRolePolicy
 # ---------------------------------------------------------------------------
