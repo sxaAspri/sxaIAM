@@ -107,6 +107,8 @@ class GCPAttackGraph:
     def __init__(self) -> None:
         self._graph: nx.DiGraph = nx.DiGraph()
         self._admin_node = AdminNode()
+        # (origen, destino, technique_id) de aristas descartadas por destino inexistente
+        self.dropped_edges: list[tuple[str, str, str]] = []
 
     @property
     def graph(self) -> nx.DiGraph:
@@ -118,6 +120,7 @@ class GCPAttackGraph:
         principals: dict[str, GCPResolvedPrincipal],
     ) -> nx.DiGraph:
         self._graph = nx.DiGraph()
+        self.dropped_edges = []
         self._graph.add_node(self._admin_node.node_id, node=self._admin_node)
         for principal in principals.values():
             node = _make_node(principal, snapshot.project_id)
@@ -165,6 +168,7 @@ class GCPAttackGraph:
                         "Objetivo %s de %s no existe en el grafo — arista descartada",
                         target, match.technique_id,
                     )
+                    self.dropped_edges.append((source, target, match.technique_id))
                     continue
 
                 if self._graph.has_edge(source, target):

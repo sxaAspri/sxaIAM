@@ -17,11 +17,14 @@ from rich import box
 from rich.console import Console
 from rich.table import Table
 
+from sxaiam.providers.gcp.cli import gcp_app
+
 app = typer.Typer(
     name="sxaiam",
     help="AWS IAM attack path analysis - find privilege escalation chains.",
     add_completion=False,
 )
+app.add_typer(gcp_app, name="gcp")
 console = Console()
 
 

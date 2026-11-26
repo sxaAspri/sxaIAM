@@ -101,6 +101,30 @@ def is_admin_member(member: str, snapshot: GCPSnapshot) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Bindings ignorados
+# ---------------------------------------------------------------------------
+
+class IgnoredReason(str, Enum):
+    CONDITIONAL = "conditional binding"
+    DELETED_MEMBER = "deleted member"
+    UNSUPPORTED_MEMBER = "unsupported member type"
+    UNSUPPORTED_ROLE = "unsupported role"
+
+
+@dataclass(frozen=True)
+class IgnoredBinding:
+    """
+    Un binding (o un miembro de un binding) que el resolver no evaluó.
+    ``member`` es ``None`` cuando se ignora el binding entero (rol no soportado).
+    """
+
+    reason: IgnoredReason
+    role: str
+    resource: str
+    member: str | None = None
+
+
+# ---------------------------------------------------------------------------
 # Resultado
 # ---------------------------------------------------------------------------
 
@@ -165,12 +189,14 @@ class GCPResolver:
         principals = resolver.resolve_all()   # dict[member → GCPResolvedPrincipal]
         alice = principals["user:alice@example.com"]
         alice.can("resourcemanager.projects.setIamPolicy", resolver.project_resource)
-        resolver.warnings                     # bindings/miembros ignorados
+        resolver.warnings                     # bindings/miembros ignorados (texto)
+        resolver.ignored                      # lo mismo, estructurado (para el CLI)
     """
 
     def __init__(self, snapshot: GCPSnapshot) -> None:
         self._snapshot = snapshot
         self.warnings: list[str] = []
+        self.ignored: list[IgnoredBinding] = []
 
     @property
     def project_resource(self) -> str:
@@ -181,6 +207,7 @@ class GCPResolver:
 
     def resolve_all(self) -> dict[str, GCPResolvedPrincipal]:
         self.warnings = []
+        self.ignored = []
         principals: dict[str, GCPResolvedPrincipal] = {}
 
         # Toda SA del snapshot es principal, aunque no tenga permisos
@@ -208,28 +235,33 @@ class GCPResolver:
     ) -> None:
         if binding.is_conditional:
             for member in binding.members:
-                self._warn(
+                self._ignore(
+                    IgnoredBinding(IgnoredReason.CONDITIONAL, binding.role, resource, member),
                     f"binding condicional ignorado: rol {binding.role} para {member} "
-                    f"en {resource} (las condiciones IAM no se evalúan)"
+                    f"en {resource} (las condiciones IAM no se evalúan)",
                 )
             return
 
         permissions = permissions_for_role(binding.role)
         if permissions is None:
-            self._warn(
+            self._ignore(
+                IgnoredBinding(IgnoredReason.UNSUPPORTED_ROLE, binding.role, resource),
                 f"rol no soportado ignorado: {binding.role} en {resource} "
-                f"(sin mapa de permisos en la PoC)"
+                f"(sin mapa de permisos en la PoC)",
             )
             return
 
         for member in binding.members:
             kind = parse_member_kind(member)
             if kind is None:
-                reason = (
-                    "miembro eliminado" if member.startswith("deleted:")
-                    else "tipo de miembro no soportado"
+                if member.startswith("deleted:"):
+                    reason, text = IgnoredReason.DELETED_MEMBER, "miembro eliminado"
+                else:
+                    reason, text = IgnoredReason.UNSUPPORTED_MEMBER, "tipo de miembro no soportado"
+                self._ignore(
+                    IgnoredBinding(reason, binding.role, resource, member),
+                    f"{text} ignorado: {member} (rol {binding.role} en {resource})",
                 )
-                self._warn(f"{reason} ignorado: {member} (rol {binding.role} en {resource})")
                 continue
 
             principal = principals.setdefault(member, GCPResolvedPrincipal(member, kind))
@@ -238,7 +270,8 @@ class GCPResolver:
                 if grant not in principal.permissions:
                     principal.permissions.append(grant)
 
-    def _warn(self, message: str) -> None:
-        if message not in self.warnings:
+    def _ignore(self, record: IgnoredBinding, message: str) -> None:
+        if record not in self.ignored:
+            self.ignored.append(record)
             self.warnings.append(message)
             logger.warning(message)

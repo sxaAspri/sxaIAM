@@ -2,11 +2,12 @@
 
 > Documento de handoff. Léelo completo antes de tocar código.
 > Rama de trabajo: `feature/gcp-poc`.
-> Estado al crear este documento (2026-11-26): plan aprobado, **ninguna fase iniciada**.
-> Rama `feature/gcp-poc` **ya creada** desde `main` (2026-11-26) y activa.
+> **Estado (2026-11-26): Fases 0 a 5 completas; Fase 6 (validación real en GCP, opcional) pendiente.**
+> Rama `feature/gcp-poc` creada desde `main` y pusheada a `origin`; PR en borrador hacia `main`.
+> El bug del `__init__.py` / versión (§6) se resuelve aparte en `fix/version` desde `main`, no en esta rama.
 >
-> ⚠️ **Cambios sin commitear heredados de `main`**: los `.pyc` en `__pycache__/`, `debug_integration.py`
-> y este mismo `planning/gcp-poc-plan.md` siguen en el directorio de trabajo dentro de esta rama.
+> ⚠️ **Cambios sin commitear heredados de `main`**: los `.pyc` en `__pycache__/` y `debug_integration.py`
+> siguen en el directorio de trabajo dentro de esta rama.
 > **No incluirlos en los commits de GCP sin revisarlos.** Hacer `git add` solo de los archivos de cada
 > fase (nunca `git add .` ni `git commit -a`).
 
@@ -204,6 +205,25 @@ muestra cambios en ningún `.py` fuera de `providers/` (núcleo intacto). Decisi
 - En `sxaiam/cli.py`: subcomando tipo `sxaiam gcp scan --snapshot proyecto.json --output report.json`.
 - Verificación: correrlo sobre el fixture y revisar el reporte Markdown.
 
+**Estado: implementada, sin commit (2026-11-26).** 18 tests en `tests/unit/providers/gcp/test_cli.py` (CliRunner)
++ 3 en `test_resolver.py` para `ignored`. Reporte Markdown del fixture revisado: 2 rutas, comandos `gcloud`
+y evidencia correctos. Decisiones:
+- El comando vive en `sxaiam/providers/gcp/cli.py` (`gcp_app`). `sxaiam/cli.py` solo cambia en 3 líneas
+  (import + `app.add_typer(gcp_app, name="gcp")`); el `scan` AWS no se toca. `console` y `_print_summary_table`
+  se importan dentro del comando para evitar el import circular.
+- Uso: `sxaiam gcp scan --snapshot <json> --output <archivo> [--format json|markdown] [--cutoff N]`.
+  Reutiliza `JSONExporter`/`MarkdownExporter` (con `account_id=project_id`) y `_print_summary_table`.
+- Resumen final: bindings ignorados **agrupados por motivo** (orden fijo: condicional, miembro eliminado,
+  tipo de miembro no soportado, rol no soportado), principales que ya son admin, y aristas descartadas por el
+  builder (`GCPAttackGraph.dropped_edges`) si las hay.
+- Encoding: mismo criterio que `6c3bc6d` (**texto de consola solo ASCII**, todo por la consola de Rich).
+  El CLI no imprime los strings en español del resolver: arma el texto desde registros estructurados
+  (`GCPResolver.ignored: list[IgnoredBinding]`, motivo en `IgnoredReason`). La 'ú' rota venía del
+  *last-resort handler* de `logging` (sin handlers configurados imprime WARNING en stderr): se agrega un
+  `NullHandler` en `sxaiam.providers.gcp` (práctica estándar de librerías). Un test verifica que la
+  advertencia cruda no aparece; sin el `NullHandler` falla.
+- Los datos del snapshot se escapan con `rich.markup.escape` (un miembro con `[bold]` no se interpreta).
+
 ### Fase 6 (opcional) — Validación real
 - Proyecto GCP (free trial; IAM no consume crédito; no crear VMs).
 - Terraform (provider `google`) que reproduzca el fixture; exportar con `gcloud`; confirmar que el loader lee la salida real.
@@ -233,6 +253,14 @@ Anotar aquí todo lo que se tuvo que tocar o que estorbó del núcleo. Esta list
 - [ ] Hallazgo AWS: `_build_technique_edges` envuelve cada string de evidencia en un dict con
   `action=<string completo>` y `resource="*"`, por lo que el reporte muestra `"<evidencia> on * (via policy: …)"`
   (texto redundante). Las aristas podrían guardar `list[str]` directamente, como hace GCP.
+- [ ] Reportes con textos AWS fijos (visible en el Markdown GCP): destino `AdministratorAccess` (label de
+  `AdminNode`), cabecera `**Account:**` y pie "AWS IAM Attack Path Analysis" en `MarkdownExporter`.
+  Generalizar: label del admin y nombre del provider como parámetros del exportador.
+- [ ] `sxaiam/` no tiene `__init__.py` (es *namespace package*): `from sxaiam import __version__` falla y
+  `sxaiam --version` siempre imprime el fallback `0.1.0`. El scan AWS tampoco pasa `version=` a los
+  exportadores (los reportes dicen v0.1.0). El CLI GCP usa `importlib.metadata.version("sxaiam")`.
+- [ ] `_print_summary_table` tiene columnas de ancho fijo (10+30+6+35): con 80 columnas (salida redirigida)
+  Rich las recorta con `…` (no ASCII) y en Windows sale `CRITI�`. Afecta también al scan AWS.
 - [ ] _(agregar durante el desarrollo)_
 
 ## 7. Forma de trabajo
@@ -253,4 +281,6 @@ Anotar aquí todo lo que se tuvo que tocar o que estorbó del núcleo. Esta list
 - `__pycache__/*.pyc` están versionados: sacarlos del índice (`git rm -r --cached`) y agregarlos a `.gitignore`.
 - Archivo suelto llamado `'` en la raíz (residuo de un comando).
 - `findings.json` y `terraform/environments/sandbox/gap_report.json` sin trackear: decidir si se ignoran.
+- La instalación local de `sxaiam` está desactualizada (`importlib.metadata` reporta 0.1.0; `pyproject.toml`
+  dice 0.2.0): reinstalar con `pip install -e .`.
 - En CI, mypy corre con `|| true` (`.github/workflows/ci.yml`): **nunca falla el build**, aunque haya errores de tipos.

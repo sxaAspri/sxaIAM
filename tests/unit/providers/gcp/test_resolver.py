@@ -15,6 +15,8 @@ from sxaiam.providers.gcp.loader import load_snapshot, parse_snapshot
 from sxaiam.providers.gcp.resolver import (
     GCPResolvedPrincipal,
     GCPResolver,
+    IgnoredBinding,
+    IgnoredReason,
     MemberKind,
     parse_member_kind,
 )
@@ -296,3 +298,27 @@ def test_resolve_all_resets_warnings(resolver: GCPResolver) -> None:
     resolver.resolve_all()
     resolver.resolve_all()
     assert len(resolver.warnings) == 1
+    assert len(resolver.ignored) == 1
+
+
+def test_ignored_records_are_structured(resolver: GCPResolver) -> None:
+    resolver.resolve_all()
+    assert resolver.ignored == [IgnoredBinding(
+        reason=IgnoredReason.CONDITIONAL,
+        role="roles/resourcemanager.projectIamAdmin",
+        resource=PROJECT,
+        member=DAVE,
+    )]
+
+
+def test_ignored_reasons() -> None:
+    resolver, _ = resolve(project_policy(
+        {"role": "roles/viewer", "members": ["deleted:user:old@x?uid=1", "principal://x/y"]},
+        {"role": "projects/p/roles/custom", "members": ["user:a@x"]},
+    ))
+    assert [(r.reason, r.member) for r in resolver.ignored] == [
+        (IgnoredReason.DELETED_MEMBER, "deleted:user:old@x?uid=1"),
+        (IgnoredReason.UNSUPPORTED_MEMBER, "principal://x/y"),
+        (IgnoredReason.UNSUPPORTED_ROLE, None),
+    ]
+    assert len(resolver.warnings) == len(resolver.ignored)
