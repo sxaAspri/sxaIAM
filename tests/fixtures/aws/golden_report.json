@@ -1,0 +1,139 @@
+{
+  "metadata": {
+    "generated_at": "2026-01-01T00:00:00Z",
+    "sxaiam_version": "0.1.0",
+    "account_id": "123456789012",
+    "total_paths": 3,
+    "critical": 1,
+    "high": 2,
+    "medium": 0,
+    "low": 0
+  },
+  "paths": [
+    {
+      "path_id": "00000000-0000-0000-0000-000000000001",
+      "severity": "HIGH",
+      "origin": {
+        "arn": "arn:aws:iam::123456789012:role/deploy",
+        "name": "deploy"
+      },
+      "target": {
+        "arn": "sxaiam::admin",
+        "name": "AdministratorAccess"
+      },
+      "step_count": 1,
+      "techniques": [
+        "create-policy-version"
+      ],
+      "steps": [
+        {
+          "step": 1,
+          "from_arn": "arn:aws:iam::123456789012:role/deploy",
+          "from_name": "deploy",
+          "to_arn": "sxaiam::admin",
+          "to_name": "AdministratorAccess",
+          "technique": "create-policy-version",
+          "severity": "HIGH",
+          "evidence": [
+            "iam:create-policy-version on * (via policy: create-policy-version)"
+          ],
+          "api_calls": [
+            "aws iam create-policy-version --example deploy"
+          ]
+        }
+      ],
+      "all_evidence": [
+        "iam:create-policy-version on * (via policy: create-policy-version)"
+      ]
+    },
+    {
+      "path_id": "00000000-0000-0000-0000-000000000002",
+      "severity": "CRITICAL",
+      "origin": {
+        "arn": "arn:aws:iam::123456789012:user/alice",
+        "name": "alice"
+      },
+      "target": {
+        "arn": "sxaiam::admin",
+        "name": "AdministratorAccess"
+      },
+      "step_count": 1,
+      "techniques": [
+        "attach-policy"
+      ],
+      "steps": [
+        {
+          "step": 1,
+          "from_arn": "arn:aws:iam::123456789012:user/alice",
+          "from_name": "alice",
+          "to_arn": "sxaiam::admin",
+          "to_name": "AdministratorAccess",
+          "technique": "attach-policy",
+          "severity": "CRITICAL",
+          "evidence": [
+            "iam:attach-policy on * (via policy: attach-policy)"
+          ],
+          "api_calls": [
+            "aws iam attach-policy --example alice"
+          ]
+        }
+      ],
+      "all_evidence": [
+        "iam:attach-policy on * (via policy: attach-policy)"
+      ]
+    },
+    {
+      "path_id": "00000000-0000-0000-0000-000000000003",
+      "severity": "HIGH",
+      "origin": {
+        "arn": "arn:aws:iam::123456789012:user/bob",
+        "name": "bob"
+      },
+      "target": {
+        "arn": "sxaiam::admin",
+        "name": "AdministratorAccess"
+      },
+      "step_count": 2,
+      "techniques": [
+        "trust_policy",
+        "create-policy-version"
+      ],
+      "steps": [
+        {
+          "step": 1,
+          "from_arn": "arn:aws:iam::123456789012:user/bob",
+          "from_name": "bob",
+          "to_arn": "arn:aws:iam::123456789012:role/deploy",
+          "to_name": "deploy",
+          "technique": "trust_policy",
+          "severity": "INFO",
+          "evidence": [
+            "iam:trust_policy on * (via policy: trust_policy)"
+          ],
+          "api_calls": [
+            "aws sts assume-role --role-arn arn:aws:iam::123456789012:role/deploy"
+          ]
+        },
+        {
+          "step": 2,
+          "from_arn": "arn:aws:iam::123456789012:role/deploy",
+          "from_name": "deploy",
+          "to_arn": "sxaiam::admin",
+          "to_name": "AdministratorAccess",
+          "technique": "create-policy-version",
+          "severity": "HIGH",
+          "evidence": [
+            "iam:create-policy-version on * (via policy: create-policy-version)"
+          ],
+          "api_calls": [
+            "aws iam create-policy-version --example deploy"
+          ]
+        }
+      ],
+      "all_evidence": [
+        "iam:trust_policy on * (via policy: trust_policy)",
+        "iam:create-policy-version on * (via policy: create-policy-version)"
+      ]
+    }
+  ]
+}

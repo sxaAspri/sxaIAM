@@ -63,9 +63,13 @@ class JSONExporter:
         self,
         account_id: str = "unknown",
         version: str = "0.1.0",
+        scope_key: str = "account_id",
     ) -> None:
+        # scope_key: nombre de la clave del metadata que guarda account_id
+        # (default AWS "account_id"; GCP pasa "project_id"). Misma posición.
         self._account_id = account_id
         self._version    = version
+        self._scope_key  = scope_key
 
     # ------------------------------------------------------------------
     # API pública
@@ -106,7 +110,7 @@ class JSONExporter:
             "metadata": {
                 "generated_at":   _now_iso(),
                 "sxaiam_version": self._version,
-                "account_id":     self._account_id,
+                self._scope_key:  self._account_id,
                 "total_paths":    len(paths),
                 "critical":       severity_counts.get("CRITICAL", 0),
                 "high":           severity_counts.get("HIGH", 0),
