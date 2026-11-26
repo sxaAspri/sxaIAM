@@ -235,7 +235,8 @@ y evidencia correctos. Decisiones:
 Anotar aquí todo lo que se tuvo que tocar o que estorbó del núcleo. Esta lista es el roadmap de generalización.
 
 - [ ] `TechniqueRegistry` necesitaría atributo `provider`.
-- [ ] `AdminNode` tiene label fijo `"AdministratorAccess"` (AWS).
+- [x] `AdminNode` tiene label fijo `"AdministratorAccess"` (AWS). **Resuelto** en
+  `refactor(core): make provider labels configurable` (ver ítem de reportes más abajo).
 - [ ] `TechniqueMatch` usa `origin_arn` / `target_arn` — GCP no tiene ARNs (deuda de nombres).
 - [ ] `PathFinder.find_all_paths()` no distingue "ya es admin" de "escala a admin": toda arista directa a AdminNode cuenta como ruta.
   En GCP se resuelve con la arista `already-admin` + filtro por origen en `providers/gcp/`; en un núcleo
@@ -253,9 +254,17 @@ Anotar aquí todo lo que se tuvo que tocar o que estorbó del núcleo. Esta list
 - [ ] Hallazgo AWS: `_build_technique_edges` envuelve cada string de evidencia en un dict con
   `action=<string completo>` y `resource="*"`, por lo que el reporte muestra `"<evidencia> on * (via policy: …)"`
   (texto redundante). Las aristas podrían guardar `list[str]` directamente, como hace GCP.
-- [ ] Reportes con textos AWS fijos (visible en el Markdown GCP): destino `AdministratorAccess` (label de
+- [x] Reportes con textos AWS fijos (visible en el Markdown GCP): destino `AdministratorAccess` (label de
   `AdminNode`), cabecera `**Account:**` y pie "AWS IAM Attack Path Analysis" en `MarkdownExporter`.
-  Generalizar: label del admin y nombre del provider como parámetros del exportador.
+  **Resuelto** en `refactor(core): make provider labels configurable`, solo etiquetas de presentación con
+  defaults AWS: `AdminNode(label=...)`, `MarkdownExporter(scope_label=..., footer_tagline=...)`,
+  `JSONExporter(scope_key=...)` (AWS `account_id`, GCP `project_id`, misma posición en el metadata).
+  GCP pasa `"Project Owner (roles/owner)"`, `"Project"` y su propio pie. Salida AWS verificada **byte a byte**
+  contra archivos de referencia generados con el código anterior (`tests/fixtures/aws/golden_report.*`,
+  `eol=lf` en `.gitattributes`; test en `tests/unit/output/test_aws_report_regression.py`).
+- [ ] Roadmap: campo `provider` (`"aws"` / `"gcp"`) en el `metadata` del JSON, para que los consumidores
+  distingan el origen sin inferirlo de `account_id` / `project_id`. Cambia el JSON AWS (campo nuevo), así que
+  requiere regenerar las referencias de forma intencional.
 - [ ] `sxaiam/` no tiene `__init__.py` (es *namespace package*): `from sxaiam import __version__` falla y
   `sxaiam --version` siempre imprime el fallback `0.1.0`. El scan AWS tampoco pasa `version=` a los
   exportadores (los reportes dicen v0.1.0). El CLI GCP usa `importlib.metadata.version("sxaiam")`.

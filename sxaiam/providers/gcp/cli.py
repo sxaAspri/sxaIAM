@@ -21,6 +21,8 @@ from rich.markup import escape
 
 from sxaiam.providers.gcp.resolver import IgnoredBinding, IgnoredReason
 
+FOOTER_TAGLINE = "GCP IAM Attack Path Analysis (PoC)"
+
 gcp_app = typer.Typer(
     name="gcp",
     help="GCP IAM attack path analysis (proof of concept, offline snapshot).",
@@ -117,10 +119,17 @@ def scan(
     try:
         if fmt == "json":
             from sxaiam.output.json_exporter import JSONExporter
-            JSONExporter(account_id=snap.project_id, version=version).export(paths, output)
+            JSONExporter(
+                account_id=snap.project_id, version=version, scope_key="project_id",
+            ).export(paths, output)
         else:
             from sxaiam.output.markdown_exporter import MarkdownExporter
-            MarkdownExporter(account_id=snap.project_id, version=version).export(paths, output)
+            MarkdownExporter(
+                account_id=snap.project_id,
+                version=version,
+                scope_label="Project",
+                footer_tagline=FOOTER_TAGLINE,
+            ).export(paths, output)
     except OSError as exc:
         console.print(f"[red]X Export failed:[/] {escape(str(exc))}")
         raise typer.Exit(code=1)

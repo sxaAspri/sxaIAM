@@ -69,13 +69,15 @@ def test_scan_json_exit_code(json_run: tuple[Any, dict[str, Any]]) -> None:
 
 def test_scan_json_report(json_run: tuple[Any, dict[str, Any]]) -> None:
     _, report = json_run
-    assert report["metadata"]["account_id"] == "acme-poc-123456"
+    assert report["metadata"]["project_id"] == "acme-poc-123456"
+    assert "account_id" not in report["metadata"]
     assert report["metadata"]["total_paths"] == 2
     assert report["metadata"]["critical"] == 1
     assert report["metadata"]["high"] == 1
     by_origin = {p["origin"]["arn"]: p for p in report["paths"]}
     assert set(by_origin) == {"user:alice@acme-poc.example", "user:bob@acme-poc.example"}
     assert by_origin["user:bob@acme-poc.example"]["severity"] == "HIGH"
+    assert by_origin["user:bob@acme-poc.example"]["target"]["name"] == "Project Owner (roles/owner)"
     assert DEPLOYER not in by_origin   # origen ya-admin filtrado
 
 
@@ -127,7 +129,12 @@ def test_scan_markdown(tmp_path: Path) -> None:
     result = run("--snapshot", str(FIXTURE), "--output", str(out), "--format", "markdown")
     assert result.exit_code == 0, result.output
     md = out.read_text(encoding="utf-8")
-    assert "`acme-poc-123456`" in md
+    assert "> **Project:** `acme-poc-123456`" in md
+    assert "GCP IAM Attack Path Analysis (PoC)*" in md
+    assert "→ `Project Owner (roles/owner)`" in md
+    # Ningún texto AWS fijo en el reporte GCP
+    for aws_text in ("**Account:**", "AdministratorAccess", "AWS IAM Attack Path Analysis"):
+        assert aws_text not in md
     assert "**2 privilege escalation path(s) found.**" in md
     assert "gcloud auth print-access-token --impersonate-service-account=" in md
     assert "via role roles/iam.serviceAccountTokenCreator" in md

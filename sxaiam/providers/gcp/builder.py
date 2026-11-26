@@ -43,6 +43,9 @@ logger = logging.getLogger(__name__)
 
 ALREADY_ADMIN = "already-admin"
 
+# Label del AdminNode en el grafo y en los reportes (AWS: "AdministratorAccess")
+GCP_ADMIN_LABEL = "Project Owner (roles/owner)"
+
 NODE_TYPE_GCP_USER = "gcp_user"
 NODE_TYPE_GCP_SERVICE_ACCOUNT = "gcp_service_account"
 
@@ -106,7 +109,7 @@ class GCPAttackGraph:
 
     def __init__(self) -> None:
         self._graph: nx.DiGraph = nx.DiGraph()
-        self._admin_node = AdminNode()
+        self._admin_node = AdminNode(label=GCP_ADMIN_LABEL)
         # (origen, destino, technique_id) de aristas descartadas por destino inexistente
         self.dropped_edges: list[tuple[str, str, str]] = []
 

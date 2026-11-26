@@ -115,11 +115,14 @@ una arista de escalación. En v0.1.0 es un nodo de soporte —
 
 @dataclass
 class AdminNode(IAMNode):
-    def __init__(self) -> None:
-        # Ignoramos los parámetros de IAMNode — AdminNode es un singleton
+    def __init__(self, label: str = "AdministratorAccess") -> None:
+        # Ignoramos los parámetros de IAMNode — AdminNode es un singleton.
+        # Solo el label es configurable (etiqueta de presentación por proveedor,
+        # p. ej. GCP); node_id y node_type son fijos: PathFinder busca el nodo
+        # por node_type y la igualdad es por node_id.
         object.__setattr__(self, "node_id",    "sxaiam::admin")
         object.__setattr__(self, "node_type",  NODE_TYPE_ADMIN)
-        object.__setattr__(self, "label",      "AdministratorAccess")
+        object.__setattr__(self, "label",      label)
         object.__setattr__(self, "account_id", None)
 
     def __hash__(self) -> int:

@@ -75,6 +75,7 @@ def test_nodes(graph: nx.DiGraph) -> None:
 
 def test_node_types(graph: nx.DiGraph) -> None:
     assert graph.nodes[ADMIN]["node"].node_type == NODE_TYPE_ADMIN
+    assert graph.nodes[ADMIN]["node"].label == "Project Owner (roles/owner)"
     assert graph.nodes[ALICE]["node"].node_type == NODE_TYPE_GCP_USER
     assert graph.nodes[DEPLOYER]["node"].node_type == NODE_TYPE_GCP_SERVICE_ACCOUNT
 
