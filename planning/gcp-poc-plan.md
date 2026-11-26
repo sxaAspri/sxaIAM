@@ -116,7 +116,7 @@ Resultado esperado sobre el fixture:
 - `sxaiam/providers/gcp/loader.py`: JSON → `GCPSnapshot`.
 - Verificación: test que carga el fixture y cuenta bindings y SAs.
 
-**Estado: hecho (2026-11-26).** 16 tests en `tests/unit/providers/gcp/test_loader.py`. Decisiones:
+**Estado: hecho (2026-11-26).** 19 tests en `tests/unit/providers/gcp/test_loader.py`. Decisiones:
 - El loader **conserva** los bindings con `condition` (`GCPBinding.is_conditional`); ignorarlos y advertir
   es trabajo del resolver (Fase 2).
 - Errores de formato → `GCPSnapshotError` (subclase de `ValueError`): falta `project_id`, SA sin `email`,
@@ -128,6 +128,20 @@ Resultado esperado sobre el fixture:
 - `sxaiam/providers/gcp/resolver.py`: agrupa bindings por miembro (`user:...`, `serviceAccount:...`, `group:...`) y devuelve permisos efectivos **con origen** (qué rol, si es a nivel proyecto o de qué SA). Ese origen se convierte en `evidence`.
 - Verificación: tests de `can(permission, resource)` por principal.
 
+**Estado: hecho (2026-11-26).** 35 tests en `tests/unit/providers/gcp/test_resolver.py`. Decisiones:
+- Recursos con nombre real de GCP: `projects/<id>` y `projects/<id>/serviceAccounts/<email>`.
+  **Herencia por prefijo:** un permiso en el proyecto cubre sus SAs (`tokenCreator` a nivel proyecto
+  ⇒ puede suplantar a todas las SAs, como en GCP real).
+- `roles.py` lista solo el **subconjunto de permisos relevante** de cada rol, no la definición completa.
+  `editor` no tiene `setIamPolicy`. `iam.securityAdmin` sí lo tiene ⇒ también es positivo de la técnica 1.
+- Miembros: `user`, `serviceAccount`, `group`, `domain`, `allUsers` y `allAuthenticatedUsers` son principales
+  normales (los grupos no se expanden). `deleted:...` y los prefijos desconocidos (`principal://`, etc.) se
+  ignoran con advertencia.
+- Bindings condicionales: se ignoran con **una advertencia por miembro** que nombra rol y miembro.
+  Los roles fuera del mapa se ignoran con advertencia.
+- Toda SA del snapshot es principal aunque no tenga permisos (necesita su nodo en la Fase 4).
+- Advertencias en `GCPResolver.warnings` (sin duplicados) y también en el logger.
+
 ### Fase 3 — Técnicas
 - `sxaiam/providers/gcp/techniques.py`:
   - `GCPEscalationTechnique` (misma interfaz que la AWS; `check(principal, snapshot)` con tipos GCP).
@@ -135,6 +149,8 @@ Resultado esperado sobre el fixture:
   - Las 2 técnicas, devolviendo el **mismo `TechniqueMatch`** de AWS.
   - Técnica 1: `target_arn="sxaiam::admin"`. Técnica 2: `target_arn=<id del nodo de la SA>`.
 - Verificación: tests positivo + negativo por técnica.
+  - Técnica 1 también con `roles/iam.securityAdmin` (tiene `setIamPolicy`), usando un **snapshot sintético**
+    en los tests de la técnica, no el fixture.
 
 ### Fase 4 — Grafo
 - `sxaiam/providers/gcp/builder.py` (`GCPAttackGraph`):
@@ -142,12 +158,17 @@ Resultado esperado sobre el fixture:
   - Arista "ya es admin": miembro con `roles/owner` en el proyecto → AdminNode. **Solo `roles/owner`, no `editor`.**
     Atributos: `technique="already-admin"`, `severity="INFO"`, **sin `technique_match`**.
   - Aristas de técnicas, conservando la de mayor severidad (misma lógica que `_build_technique_edges`).
+  - **Los principales que ya son admin (`roles/owner`) NO se evalúan contra técnicas**: solo reciben la arista
+    `already-admin`. Motivo: `owner` tiene `setIamPolicy`, así que la técnica 1 dispararía para `deployer@`;
+    su arista CRITICAL le ganaría a la INFO y la ruta de bob (bob → deployer → admin) saldría CRITICAL en
+    vez de HIGH.
   - Filtro de rutas cuyo **origen ya es admin** (el primer nodo tiene arista `already-admin` hacia AdminNode):
     función en `sxaiam/providers/gcp/` (p. ej. `filter_already_admin(paths, graph)`). **No** se toca
     `pathfinder.py` ni los exportadores.
 - Verificación (sin tocar `pathfinder.py`):
   - `PathFinder(G).find_all_paths()` crudo devuelve **3 rutas**: alice→admin, bob→deployer→admin, deployer→admin.
   - Tras el filtro quedan **2 rutas**: alice (1 salto) y bob (2 saltos).
+  - La ruta de bob tiene severidad **HIGH**, no CRITICAL; y la arista `deployer → admin` es `already-admin`/INFO.
 
 ### Fase 5 — CLI
 - En `sxaiam/cli.py`: subcomando tipo `sxaiam gcp scan --snapshot proyecto.json --output report.json`.
@@ -172,6 +193,11 @@ Anotar aquí todo lo que se tuvo que tocar o que estorbó del núcleo. Esta list
 - [ ] Hallazgo AWS: `_ADMIN_ACTIONS` y `_ADMIN_POLICY_ARNS` (`graph/builder.py:56-64`) están definidas pero
   **no se usan** en ningún lado. El builder AWS nunca crea aristas "ya es admin", así que un principal con
   `AdministratorAccess` no aparece como admin en el grafo. Revisar si es intencional o código muerto.
+- [ ] Candidata a tercera técnica GCP: `iam.serviceAccounts.setIamPolicy` sobre una SA (p. ej. con
+  `roles/iam.securityAdmin`) ⇒ el atacante se otorga `tokenCreator` sobre la SA y luego la suplanta.
+  Ya está en el mapa de roles; falta la técnica.
+- [ ] Roadmap: miembros `principal://` / `principalSet://` (Workload/Workforce Identity Federation).
+  Hoy el resolver los ignora con advertencia.
 - [ ] _(agregar durante el desarrollo)_
 
 ## 7. Forma de trabajo
