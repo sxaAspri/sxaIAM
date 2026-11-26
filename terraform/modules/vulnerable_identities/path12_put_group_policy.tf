@@ -1,19 +1,19 @@
 # =============================================================================
 # RUTA DE ATAQUE 12: PutGroupPolicy inline escalation
 #
-# Técnica: el atacante tiene iam:PutGroupPolicy sobre un grupo con miembros.
-# Inyecta una inline policy con Allow *:* en ese grupo. Todos los miembros
-# heredan acceso de administrador inmediatamente.
+# Técnica: el atacante es miembro de un grupo y tiene iam:PutGroupPolicy sobre
+# él. Inyecta una inline policy con Allow *:* en ese grupo y, como miembro,
+# hereda acceso de administrador inmediatamente.
 #
 # Cadena:
-#   put_group_policy_user
+#   put_group_policy_user (miembro de target_group)
 #     → iam:PutGroupPolicy on target_group
 #     → crea inline policy {"Effect":"Allow","Action":"*","Resource":"*"}
-#     → todos los miembros de target_group heredan admin
+#     → put_group_policy_user hereda admin como miembro de target_group
 #
 # Lo que sxaiam debe detectar:
-#   put_group_policy_user tiene iam:PutGroupPolicy sobre un grupo
-#   con políticas adjuntas → puede escalar a admin
+#   put_group_policy_user es miembro de un grupo y tiene iam:PutGroupPolicy
+#   sobre él → puede escalar a admin. El grupo no necesita políticas previas.
 # =============================================================================
 
 resource "aws_iam_group" "target_group" {
@@ -58,4 +58,11 @@ resource "aws_iam_user" "put_group_policy_user" {
 resource "aws_iam_user_policy_attachment" "put_group_policy_permissions" {
   user       = aws_iam_user.put_group_policy_user.name
   policy_arn = aws_iam_policy.put_group_policy_permissions.arn
+}
+
+# El atacante debe ser miembro del grupo: sin membresía, inyectar una
+# política en target_group no le da ningún permiso.
+resource "aws_iam_user_group_membership" "put_group_policy_user_membership" {
+  user   = aws_iam_user.put_group_policy_user.name
+  groups = [aws_iam_group.target_group.name]
 }
