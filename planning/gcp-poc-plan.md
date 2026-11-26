@@ -186,6 +186,20 @@ Resultado esperado sobre el fixture:
   - Snapshot sintético: principal → (T2) → SA con `projectIamAdmin` → (T1) → admin. Debe salir **1 ruta de
     2 pasos con severidad CRITICAL** (la severidad de una ruta es la máxima de sus pasos: max(HIGH, CRITICAL)).
 
+**Estado: implementada, sin commit (2026-11-26).** 22 tests en `tests/unit/providers/gcp/test_builder.py`.
+Verificado: 3 rutas crudas, 2 filtradas, bob HIGH, cadena sintética CRITICAL en 2 pasos. `git diff main` no
+muestra cambios en ningún `.py` fuera de `providers/` (núcleo intacto). Decisiones:
+- Nodos: `GCPUserNode` (`gcp_user`), `GCPServiceAccountNode` (`gcp_service_account`) y `GCPPrincipalNode`
+  para `gcp_group`, `gcp_domain`, `gcp_all_users` y `gcp_all_authenticated_users`. `node_id` = miembro IAM,
+  `account_id` = project_id. Definidos en `providers/gcp/builder.py`, no en `graph/nodes.py`.
+- Evidencia en las aristas como `list[str]` (no `list[dict]` como AWS): `_evidence_to_strings` y el exportador
+  GraphML ya la aceptan.
+- Si el `target_arn` de un match no existe como nodo, la arista se **descarta con advertencia**; no se redirige
+  al AdminNode como hace `_resolve_target` en AWS.
+- Filtro: `filter_already_admin(paths, graph)` + `is_already_admin_node(graph, node_id)`. Solo descarta por
+  **origen**; las rutas que pasan por un admin se conservan.
+- Extra cubierto por tests: cadena SA → SA → owner (3 pasos, HIGH), `allUsers` con `projectIamAdmin` (CRITICAL).
+
 ### Fase 5 — CLI
 - En `sxaiam/cli.py`: subcomando tipo `sxaiam gcp scan --snapshot proyecto.json --output report.json`.
 - Verificación: correrlo sobre el fixture y revisar el reporte Markdown.
@@ -214,6 +228,11 @@ Anotar aquí todo lo que se tuvo que tocar o que estorbó del núcleo. Esta list
   Ya está en el mapa de roles; falta la técnica.
 - [ ] Roadmap: miembros `principal://` / `principalSet://` (Workload/Workforce Identity Federation).
   Hoy el resolver los ignora con advertencia.
+- [ ] Hallazgo AWS: `_resolve_target` (`graph/builder.py`) redirige al AdminNode cualquier `target_arn` que no
+  sea un nodo. Una técnica con un objetivo mal resuelto genera así una ruta a admin falsa. GCP descarta la arista.
+- [ ] Hallazgo AWS: `_build_technique_edges` envuelve cada string de evidencia en un dict con
+  `action=<string completo>` y `resource="*"`, por lo que el reporte muestra `"<evidencia> on * (via policy: …)"`
+  (texto redundante). Las aristas podrían guardar `list[str]` directamente, como hace GCP.
 - [ ] _(agregar durante el desarrollo)_
 
 ## 7. Forma de trabajo
