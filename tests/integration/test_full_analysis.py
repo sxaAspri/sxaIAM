@@ -19,7 +19,9 @@ The handcrafted snapshot mirrors the current Terraform sandbox coverage:
   path10: put_user_policy_user with iam:PutUserPolicy             -> HIGH
   path11: put_role_policy_user with iam:PutRolePolicy             -> HIGH
   path12: put_group_policy_user with iam:PutGroupPolicy           -> HIGH
+          (member of target_group, ReadOnlyAccess)
   path13: attach_group_policy_user with iam:AttachGroupPolicy     -> HIGH
+          (member of escalation_group, no policies)
   path14: update_assume_role_user with iam:UpdateAssumeRolePolicy -> HIGH
 
 Success criteria:
@@ -60,6 +62,7 @@ from sxaiam.resolver.models import ResolvedIdentity
 ACCOUNT_ID = "123456789012"
 ADMIN_POLICY_ARN = "arn:aws:iam::aws:policy/AdministratorAccess"
 POWERUSER_POLICY_ARN = "arn:aws:iam::aws:policy/PowerUserAccess"
+READONLY_POLICY_ARN = "arn:aws:iam::aws:policy/ReadOnlyAccess"
 
 # User ARNs
 LOW_PRIV_ARN = f"arn:aws:iam::{ACCOUNT_ID}:user/low_priv_user"
@@ -87,6 +90,9 @@ ASSUMABLE_ROLE_ARN = f"arn:aws:iam::{ACCOUNT_ID}:role/assumable_role"
 
 # Group ARNs
 ADMIN_GROUP_ARN = f"arn:aws:iam::{ACCOUNT_ID}:group/admin_group"
+# Grupos de los paths 12 y 13: el atacante es miembro (como en el sandbox Terraform)
+TARGET_GROUP_ARN = f"arn:aws:iam::{ACCOUNT_ID}:group/target_group"
+ESCALATION_GROUP_ARN = f"arn:aws:iam::{ACCOUNT_ID}:group/escalation_group"
 
 
 # ---------------------------------------------------------------------------
@@ -248,14 +254,14 @@ def sandbox_snapshot() -> IAMSnapshot:
         arn=f"arn:aws:iam::{ACCOUNT_ID}:policy/PutGroupPolicyPolicy",
         policy_id="PID-PUT-GROUP",
         is_aws_managed=False,
-        document=_inline_doc(["iam:PutGroupPolicy"], [ADMIN_GROUP_ARN]),
+        document=_inline_doc(["iam:PutGroupPolicy"], [TARGET_GROUP_ARN]),
     )
     attach_group_policy_policy = IAMPolicy(
         name="AttachGroupPolicyPolicy",
         arn=f"arn:aws:iam::{ACCOUNT_ID}:policy/AttachGroupPolicyPolicy",
         policy_id="PID-ATTACH-GROUP",
         is_aws_managed=False,
-        document=_inline_doc(["iam:AttachGroupPolicy"], [ADMIN_GROUP_ARN]),
+        document=_inline_doc(["iam:AttachGroupPolicy"], [ESCALATION_GROUP_ARN]),
     )
     update_assume_role_policy = IAMPolicy(
         name="UpdateAssumeRolePolicy",
@@ -344,11 +350,13 @@ def sandbox_snapshot() -> IAMSnapshot:
         PUT_GROUP_POLICY_ARN,
         "put_group_policy_user",
         attached_policies=[_attached("PutGroupPolicyPolicy", put_group_policy_policy.arn)],
+        group_names=["target_group"],
     )
     attach_group_policy_user = _make_user(
         ATTACH_GROUP_POLICY_ARN,
         "attach_group_policy_user",
         attached_policies=[_attached("AttachGroupPolicyPolicy", attach_group_policy_policy.arn)],
+        group_names=["escalation_group"],
     )
     update_assume_role_user = _make_user(
         UPDATE_ASSUME_ROLE_ARN,
@@ -393,6 +401,21 @@ def sandbox_snapshot() -> IAMSnapshot:
         inline_policies={},
         member_names=[],
     )
+    target_group = IAMGroup(
+        name="target_group",
+        arn=TARGET_GROUP_ARN,
+        group_id="GIDTARGET",
+        path="/",
+        attached_policies=[_attached("ReadOnlyAccess", READONLY_POLICY_ARN)],
+        member_names=["put_group_policy_user"],
+    )
+    escalation_group = IAMGroup(
+        name="escalation_group",
+        arn=ESCALATION_GROUP_ARN,
+        group_id="GIDESCALATION",
+        path="/",
+        member_names=["attach_group_policy_user"],
+    )
 
     snapshot = IAMSnapshot(
         account_id=ACCOUNT_ID,
@@ -415,7 +438,7 @@ def sandbox_snapshot() -> IAMSnapshot:
             update_assume_role_user,
         ],
         roles=[ci_role, admin_role, lambda_role, assumable_role],
-        groups=[admin_group],
+        groups=[admin_group, target_group, escalation_group],
         policies=[
             deployment_policy,
             policy_manager_policy,
@@ -623,3 +646,50 @@ class TestOutputStructure:
                     f"Incorrect step_number in path {path.path_id}: "
                     f"expected {i}, found {step.step_number}"
                 )
+
+# ---------------------------------------------------------------------------
+# Tests - group membership (paths 12 and 13)
+# ---------------------------------------------------------------------------
+
+class TestGroupMembership:
+    """Group techniques only fire for members; membership data must be consistent."""
+
+    def test_group_names_and_member_names_are_consistent(
+        self, sandbox_snapshot: IAMSnapshot,
+    ):
+        # user.group_names (what the API returns) and group.member_names
+        # (derived by IngestionClient.collect) describe the same membership.
+        from_users = {
+            (user.name, group_name)
+            for user in sandbox_snapshot.users
+            for group_name in user.group_names
+        }
+        from_groups = {
+            (member, group.name)
+            for group in sandbox_snapshot.groups
+            for member in group.member_names
+        }
+        assert from_users == from_groups
+
+    @pytest.mark.parametrize(
+        ("origin_arn", "technique_id", "group_name"),
+        [
+            (PUT_GROUP_POLICY_ARN, "put-group-policy", "target_group"),
+            (ATTACH_GROUP_POLICY_ARN, "attach-group-policy", "escalation_group"),
+        ],
+    )
+    def test_group_technique_targets_own_group(
+        self,
+        sandbox_snapshot: IAMSnapshot,
+        resolved_identities: list[ResolvedIdentity],
+        origin_arn: str,
+        technique_id: str,
+        group_name: str,
+    ):
+        from sxaiam.findings.registry import TechniqueRegistry
+
+        identity = next(r for r in resolved_identities if r.arn == origin_arn)
+        technique = TechniqueRegistry.get(technique_id)
+        assert technique is not None
+        matches = technique.check(identity, sandbox_snapshot)
+        assert [m.target_name for m in matches] == [group_name]

@@ -1047,18 +1047,36 @@ class PutRolePolicyTechnique(EscalationTechnique):
 
 TechniqueRegistry.register(PutRolePolicyTechnique())
 
+def _is_group_member(identity, group, snapshot) -> bool:
+    """
+    True if the identity is a user that belongs to the group.
+
+    Membership is read from the user side (user.group_names): it is what
+    GetAccountAuthorizationDetails returns (each user's GroupList) and what
+    the resolver uses to apply group policies. Roles are never in the user
+    index, so they can never be group members.
+
+    Requires snapshot.build_indexes() (called by IngestionClient.collect).
+    """
+    user = snapshot.user_by_arn(identity.arn)
+    return user is not None and group.name in user.group_names
+
+
 # ---------------------------------------------------------------------------
 # Technique 12 — PutGroupPolicy (inline policy on group)
 # ---------------------------------------------------------------------------
 
 class PutGroupPolicyTechnique(EscalationTechnique):
     """
-    The attacker has iam:PutGroupPolicy on a group that has members.
-    They inject an inline policy with Allow *:* into that group.
-    Any user in the group immediately inherits full administrator access.
+    The attacker is a member of a group and has iam:PutGroupPolicy on it.
+    They inject an inline policy with Allow *:* into that group and
+    inherit full administrator access as a member.
+
+    The group does not need any existing policy: PutGroupPolicy creates
+    the inline policy itself.
 
     Permissions needed:
-      - iam:PutGroupPolicy (on a target group or *)
+      - iam:PutGroupPolicy (on a group the attacker belongs to, or *)
     """
 
     @property
@@ -1080,9 +1098,9 @@ class PutGroupPolicyTechnique(EscalationTechnique):
     @property
     def description(self) -> str:
         return (
-            "The identity has iam:PutGroupPolicy on a group. By injecting "
-            "an inline policy with Allow *:* into that group, all members "
-            "immediately inherit full administrator access."
+            "The identity is a member of a group and has iam:PutGroupPolicy "
+            "on it. By injecting an inline policy with Allow *:* into that "
+            "group, it immediately inherits full administrator access."
         )
 
     def check(self, identity, snapshot) -> list[TechniqueMatch]:
@@ -1096,7 +1114,7 @@ class PutGroupPolicyTechnique(EscalationTechnique):
             if not can_put:
                 continue
 
-            if not group.attached_policies and not group.inline_policies:
+            if not _is_group_member(identity, group, snapshot):
                 continue
 
             evidence = self._build_evidence(identity, ["iam:PutGroupPolicy"])
@@ -1113,8 +1131,8 @@ class PutGroupPolicyTechnique(EscalationTechnique):
                 attack_steps=[
                     f"1. Call iam:PutGroupPolicy on {group.name} "
                     'with document {"Effect":"Allow","Action":"*","Resource":"*"}',
-                    f"2. All members of {group.name} immediately inherit "
-                    "full administrator access",
+                    f"2. {identity.name}, a member of {group.name}, immediately "
+                    "inherits full administrator access",
                 ],
             ))
 
@@ -1129,12 +1147,12 @@ TechniqueRegistry.register(PutGroupPolicyTechnique())
 
 class AttachGroupPolicyTechnique(EscalationTechnique):
     """
-    The attacker has iam:AttachGroupPolicy on a group that has members.
-    They attach AdministratorAccess directly to that group.
-    All members immediately inherit full administrator access.
+    The attacker is a member of a group and has iam:AttachGroupPolicy on it.
+    They attach AdministratorAccess directly to that group and inherit it
+    as a member.
 
     Permissions needed:
-      - iam:AttachGroupPolicy (on a target group or *)
+      - iam:AttachGroupPolicy (on a group the attacker belongs to, or *)
     """
 
     @property
@@ -1156,9 +1174,9 @@ class AttachGroupPolicyTechnique(EscalationTechnique):
     @property
     def description(self) -> str:
         return (
-            "The identity has iam:AttachGroupPolicy on a group. By attaching "
-            "AdministratorAccess to that group, all its members immediately "
-            "inherit full administrator access."
+            "The identity is a member of a group and has iam:AttachGroupPolicy "
+            "on it. By attaching AdministratorAccess to that group, it "
+            "immediately inherits full administrator access."
         )
 
     def check(self, identity, snapshot) -> list[TechniqueMatch]:
@@ -1171,6 +1189,9 @@ class AttachGroupPolicyTechnique(EscalationTechnique):
                 or identity.can("iam:AttachGroupPolicy", "*")
             )
             if not can_attach:
+                continue
+
+            if not _is_group_member(identity, group, snapshot):
                 continue
 
             evidence = self._build_evidence(identity, ["iam:AttachGroupPolicy"])
@@ -1187,8 +1208,8 @@ class AttachGroupPolicyTechnique(EscalationTechnique):
                 attack_steps=[
                     f"1. Call iam:AttachGroupPolicy with GroupName={group.name} "
                     f"and PolicyArn={admin_policy_arn}",
-                    f"2. All members of {group.name} immediately inherit "
-                    "AdministratorAccess",
+                    f"2. {identity.name}, a member of {group.name}, immediately "
+                    "inherits AdministratorAccess",
                 ],
             ))
 
